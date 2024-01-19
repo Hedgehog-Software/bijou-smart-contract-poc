@@ -1,12 +1,13 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 use storage_types::{DataKey, Token};
 
 use crate::storage_types;
 
-pub fn init_token_a(e: &Env, token: &Address) {
+pub fn init_token_a(e: &Env, token: &Address, name: Symbol) {
     e.storage().instance().set(
         &DataKey::TokenA,
         &Token {
+            name,
             address: token.clone(),
             deposited_amount: 0,
             swapped_amount: 0,
@@ -17,10 +18,11 @@ pub fn init_token_a(e: &Env, token: &Address) {
     );
 }
 
-pub fn init_token_b(e: &Env, token: &Address) {
+pub fn init_token_b(e: &Env, token: &Address, name: Symbol) {
     e.storage().instance().set(
         &DataKey::TokenB,
         &Token {
+            name,
             address: token.clone(),
             deposited_amount: 0,
             swapped_amount: 0,
