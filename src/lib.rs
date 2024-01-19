@@ -7,17 +7,18 @@ mod token_data;
 
 use core::cmp::min;
 
-use constants::{
-    ADMIN_ADDRESS, COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_MATURE,
-    TIME_TO_REPAY,
-};
-use soroban_sdk::{contract, contractimpl, symbol_short, token, vec, Address, Env, String, Symbol};
+use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol};
 use storage_types::{Asset, DataKey, Error, PriceData, Token, User};
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
     add_token_swapped_amount, add_token_withdrawn_amount, get_token_a, get_token_a_address,
     get_token_b, get_token_b_address, init_token_a, init_token_b,
 };
+
+fn get_admin(e: &Env) -> Address {
+    e.storage().persistent().get(&DataKey::Admin).unwrap()
+}
 
 fn get_and_add(e: &Env, key: DataKey, amount: i128) {
     let mut count: i128 = e.storage().persistent().get(&key).unwrap_or_default();
@@ -88,6 +89,17 @@ fn get_init_time(e: &Env) -> u64 {
     e.storage().persistent().get(&DataKey::InitTime).unwrap()
 }
 
+fn get_time_to_mature(e: &Env) -> u64 {
+    e.storage()
+        .persistent()
+        .get(&DataKey::TimeToMature)
+        .unwrap()
+}
+
+fn put_admin(e: &Env, address: Address) {
+    e.storage().persistent().set(&DataKey::Admin, &address);
+}
+
 fn put_deposited_token(e: &Env, to: &Address, token: &Address) {
     e.storage()
         .persistent()
@@ -137,6 +149,12 @@ fn put_init_time(e: &Env) {
     e.storage().persistent().set(&DataKey::InitTime, &time);
 }
 
+fn put_time_to_mature(e: &Env, duration: u64) {
+    e.storage()
+        .persistent()
+        .set(&DataKey::TimeToMature, &duration);
+}
+
 fn put_is_liquidated(e: &Env, to: &Address, val: bool) {
     let key = DataKey::ReturnedAmount(to.clone());
     e.storage().persistent().set(&key, &val);
@@ -174,7 +192,8 @@ fn has_near_leg_executed(e: &Env) -> bool {
 fn max_time_reached(e: &Env) -> bool {
     let ledger_timestamp = e.ledger().timestamp();
     let init_time: u64 = get_init_time(&e);
-    let time_limit: u64 = init_time + TIME_TO_EXEC + TIME_TO_MATURE + TIME_TO_REPAY;
+    let time_to_mature = get_time_to_mature(&e);
+    let time_limit: u64 = init_time + TIME_TO_EXEC + time_to_mature + TIME_TO_REPAY;
     ledger_timestamp >= time_limit
 }
 
@@ -184,20 +203,55 @@ fn has_not_repaid(e: &Env, to: &Address) -> bool {
     swapped_amount >= returned_amount
 }
 
+fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i128 {
+    let forward_rate = get_forward_rate(&e);
+    let collateral = get_collateral(&e, &to);
+    let swapped_amount = get_swapped_amount(&e, &to);
+    let mut reward_amount: i128 = 0;
+
+    let expired_and_not_repaid = max_time_reached(&e) && has_not_repaid(&e, &to);
+
+    if let Some(token) = get_deposited_token(&e, &to) {
+        if token == get_token_a_address(&e) {
+            // If user deposited a then it swapped b
+            // User a needs to have 150 of the corresponding to token b in its collateral
+            // we need to convert swapped amount into token a
+            let min_collateral = ((COLLATERAL_BUFFER * swapped_amount) / forward_rate) / SCALE;
+            let curr_collateral = convert_amount_token_b_to_a(collateral, spot_price);
+            reward_amount = collateral / 100;
+
+            if (min_collateral > curr_collateral) || expired_and_not_repaid {
+                put_is_liquidated(&e, &to, true);
+                transfer_a(&e, &from, reward_amount);
+            }
+        } else {
+            let min_collateral = (COLLATERAL_BUFFER * swapped_amount * forward_rate) / SCALE;
+            let curr_collateral = convert_amount_token_a_to_b(collateral, spot_price);
+            reward_amount = collateral / 100;
+
+            if (min_collateral > curr_collateral) || expired_and_not_repaid {
+                put_is_liquidated(&e, &to, true);
+                transfer_b(&e, &from, reward_amount);
+            }
+        }
+    }
+    reward_amount
+}
+
 // Oracle
 fn get_oracle_spot_price(e: &Env) -> PriceData {
-    return PriceData {
-        price: 100_000,
-        timestamp: 2,
-    };
+    // return PriceData {
+    //     price: 100_000_000_000_000,
+    //     timestamp: 2,
+    // };
 
-    let oracle_address = String::from_str(&e, ORACLE_ADDRESS);
+    let oracle_address: String = String::from_str(&e, ORACLE_ADDRESS);
     let target: Address = Address::from_string(&oracle_address);
     let func: Symbol = Symbol::new(&e, "x_last_price");
-    let base_token = get_token_a(&e).address;
-    let base_asset = Asset::Stellar(base_token);
-    let quote_token = get_token_b(&e).address;
-    let quote_asset = Asset::Stellar(quote_token);
+    let base_token = get_token_a(&e).name;
+    let base_asset = Asset::Other(base_token);
+    let quote_token = get_token_b(&e).name;
+    let quote_asset = Asset::Other(quote_token);
     let args = vec![&e, base_asset, quote_asset].to_vals();
     e.invoke_contract::<PriceData>(&target, &func, args)
 }
@@ -226,14 +280,16 @@ fn get_user_deposit(e: &Env, to: &Address) -> (i128, i128) {
 
 fn get_user_amount_to_repay(e: &Env, to: &Address) -> i128 {
     let forward_rate = get_forward_rate(&e);
+    let spot_rate = get_spot_rate(&e);
     let swapped_amount = get_swapped_amount(&e, &to);
     let mut repay_amount: i128 = 0;
     if let Some(token) = get_deposited_token(&e, &to) {
         let token_a_address = get_token_a_address(&e);
         if token == token_a_address {
-            repay_amount = swapped_amount * forward_rate / SCALE;
+            repay_amount = swapped_amount;
         } else {
-            repay_amount = swapped_amount / (forward_rate / SCALE);
+            let used_deposited_amount = convert_amount_token_a_to_b(swapped_amount, spot_rate);
+            repay_amount = convert_amount_token_b_to_a(used_deposited_amount, forward_rate);
         }
     }
     repay_amount
@@ -245,7 +301,7 @@ fn convert_amount_token_a_to_b(amount: i128, rate: i128) -> i128 {
 }
 
 fn convert_amount_token_b_to_a(amount: i128, rate: i128) -> i128 {
-    amount / (rate / SCALE)
+    (amount * SCALE) / rate
 }
 
 fn is_valid_token(e: &Env, token: Address) -> bool {
@@ -254,25 +310,29 @@ fn is_valid_token(e: &Env, token: Address) -> bool {
     token == token_a_address || token == token_b_address
 }
 
-// Initial Deposit (Amount + Collateral)
-
-// Execute Deposit (Only collateral)
-
-// Finish Deposit (Swapped Amount)
-
 pub trait SwapTrait {
     // Sets the token contract addresses for this pooli128
     //
     // # Arguments
     //
+    // * `admin` - Address of admin
     // * `token_a` - Address of token A to swap
     // * `token_b` - Address of token B to swap
     // * `forward_rate` - forward rate
-    //
+    // * `duration` - Contract duration until the contract matures
     // # Returns
     //
     // None
-    fn initialize(e: Env, token_a: Address, token_b: Address, forward_rate: i128);
+    fn initialize(
+        e: Env,
+        admin: Address,
+        token_a: Address,
+        token_b: Address,
+        name_token_a: Symbol,
+        name_token_b: Symbol,
+        forward_rate: i128,
+        duration: u64,
+    );
 
     // Deposits to: User, token: Address of token to deposit amount
     // TODO: Add desired execution time
@@ -327,6 +387,8 @@ pub trait SwapTrait {
     //
     // Reward amount if address liquidated, 0 if it was not or collateral was too low
     fn liquidate(e: Env, to: Address, from: Address) -> i128;
+
+    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> i128;
 
     // To repay the amount previously swapped
     //
@@ -392,6 +454,11 @@ pub trait SwapTrait {
     // Spot rate value
     fn spot_rate(e: Env) -> i128;
 
+    // Returns the Admin address
+    //
+    // # Returns
+    //
+    // Admin address
     fn admin(e: Env) -> Address;
 
     // Returns the two tokens and its balances
@@ -412,7 +479,7 @@ pub trait SwapTrait {
     //
     // None    // * `to` - Address of user
 
-    fn set_spot(e: Env, to: Address, rate: i128);
+    fn set_spot(e: Env, to: Address, rate: i128) -> Result<(), Error>;
 }
 
 // Users can monitor the contract
@@ -445,11 +512,22 @@ struct Swap;
 
 #[contractimpl]
 impl SwapTrait for Swap {
-    fn initialize(e: Env, token_a: Address, token_b: Address, forward_rate: i128) {
-        init_token_a(&e, &token_a);
-        init_token_b(&e, &token_b);
+    fn initialize(
+        e: Env,
+        admin: Address,
+        token_a: Address,
+        token_b: Address,
+        name_token_a: Symbol,
+        name_token_b: Symbol,
+        forward_rate: i128,
+        duration: u64,
+    ) {
+        put_admin(&e, admin);
+        init_token_a(&e, &token_a, name_token_a);
+        init_token_b(&e, &token_b, name_token_b);
         put_forward_rate(&e, forward_rate);
         put_init_time(&e);
+        put_time_to_mature(&e, duration);
     }
 
     fn deposit(
@@ -623,41 +701,13 @@ impl SwapTrait for Swap {
 
     fn liquidate(e: Env, to: Address, from: Address) -> i128 {
         from.require_auth();
+        let spot_price: i128 = get_oracle_spot_price(&e).price;
+        liquidate_user(&e, &to, &from, spot_price)
+    }
 
-        let forward_rate = get_forward_rate(&e);
-        let collateral = get_collateral(&e, &to);
-        let spot_price = get_oracle_spot_price(&e).price;
-        let swapped_amount = get_swapped_amount(&e, &to);
-        let mut reward_amount: i128 = 0;
-
-        let expired_and_not_repaid = max_time_reached(&e) && has_not_repaid(&e, &to);
-
-        if let Some(token) = get_deposited_token(&e, &to) {
-            if token == get_token_a_address(&e) {
-                // If user deposited a then it swapped b
-                // User a needs to have 150 of the corresponding to token b in its collateral
-                // we need to convert swapped amount into token a
-                let min_collateral = ((COLLATERAL_BUFFER * swapped_amount) / forward_rate) / SCALE;
-                let curr_collateral = convert_amount_token_b_to_a(collateral, spot_price);
-                reward_amount = collateral / 100;
-
-                if (min_collateral > curr_collateral) || expired_and_not_repaid {
-                    put_is_liquidated(&e, &to, true);
-                    transfer_a(&e, &from, reward_amount);
-                }
-            } else {
-                let min_collateral = (COLLATERAL_BUFFER * swapped_amount * forward_rate) / SCALE;
-                let curr_collateral = convert_amount_token_a_to_b(collateral, spot_price);
-                reward_amount = collateral / 100;
-
-                if (min_collateral > curr_collateral) || expired_and_not_repaid {
-                    put_is_liquidated(&e, &to, true);
-                    transfer_b(&e, &from, reward_amount);
-                }
-            }
-        }
-
-        reward_amount
+    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> i128 {
+        from.require_auth();
+        liquidate_user(&e, &to, &from, spot_price)
     }
 
     fn repay(e: Env, to: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
@@ -684,9 +734,20 @@ impl SwapTrait for Swap {
             }
         }
 
-        token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
-        put_returned_amount(&e, &to, amount);
-        add_token_returned_amount(&e, &token, amount);
+        let prev_total_amount_to_repay = get_user_amount_to_repay(&e, &to);
+        let prev_total_returned_amount = get_returned_amount(&e, &to);
+        let repay_amount = min(
+            amount,
+            prev_total_amount_to_repay - prev_total_returned_amount,
+        );
+
+        if repay_amount <= 0 {
+            return Err(Error::AlreadyRepaid);
+        }
+
+        token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &repay_amount);
+        put_returned_amount(&e, &to, repay_amount);
+        add_token_returned_amount(&e, &token, repay_amount);
 
         let total_returned_amount = get_returned_amount(&e, &to);
         let total_amount_to_repay = get_user_amount_to_repay(&e, &to);
@@ -695,23 +756,32 @@ impl SwapTrait for Swap {
 
     fn withdraw(e: Env, to: Address) -> Result<i128, Error> {
         let forward_rate = get_forward_rate(&e);
+        let spot_rate = get_spot_rate(&e);
         let returned_amount = get_returned_amount(&e, &to);
+        let swapped_amount = get_swapped_amount(&e, &to);
         let deposited_token = get_deposited_token(&e, &to).unwrap();
-        let mut withdraw_amount: i128 = 0;
+        let withdraw_amount: i128;
 
         if !max_time_reached(&e) {
             return Err(Error::TimeNotReached);
         }
 
         if deposited_token == get_token_a_address(&e) {
-            // User returned token_b
-            withdraw_amount = convert_amount_token_b_to_a(returned_amount, forward_rate);
+            let used_deposited_amount = convert_amount_token_b_to_a(swapped_amount, forward_rate);
+            let converted_returned_amount =
+                convert_amount_token_b_to_a(returned_amount, forward_rate);
+            withdraw_amount = min(used_deposited_amount, converted_returned_amount);
+
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
             put_withdrawn_amount(&e, &to, withdraw_amount);
             transfer_a(&e, &to, withdraw_amount);
         } else {
             // User returned token_a
-            withdraw_amount = convert_amount_token_a_to_b(returned_amount, forward_rate);
+            let used_deposited_amount = convert_amount_token_a_to_b(swapped_amount, spot_rate);
+            let converted_returned_amount =
+                convert_amount_token_a_to_b(returned_amount, forward_rate);
+            withdraw_amount = min(used_deposited_amount, converted_returned_amount);
+
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
             put_withdrawn_amount(&e, &to, withdraw_amount);
             transfer_b(&e, &to, withdraw_amount);
@@ -724,13 +794,9 @@ impl SwapTrait for Swap {
         get_spot_rate(&e)
     }
 
-    // Calling adming
+    // See admin
     fn admin(e: Env) -> Address {
-        let oracle_address = String::from_str(&e, ORACLE_ADDRESS);
-        let target: Address = Address::from_string(&oracle_address);
-        let func: Symbol = symbol_short!("admin");
-        let args = vec![&e];
-        e.invoke_contract::<Address>(&target, &func, args)
+        get_admin(&e)
     }
 
     fn near_leg(e: Env) -> Result<PriceData, Error> {
@@ -752,11 +818,13 @@ impl SwapTrait for Swap {
         (token_a, token_b)
     }
 
-    fn set_spot(e: Env, to: Address, amount: i128) {
-        // to.require_auth();
-        let admin_address = Address::from_string(&String::from_str(&e, ADMIN_ADDRESS));
-        if to == admin_address {
-            put_spot_rate(&e, amount);
+    fn set_spot(e: Env, to: Address, amount: i128) -> Result<(), Error> {
+        to.require_auth();
+        let admin_address = get_admin(&e);
+        if to != admin_address {
+            return Err(Error::Unauthorized);
         }
+        put_spot_rate(&e, amount);
+        Ok(())
     }
 }
