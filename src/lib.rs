@@ -16,8 +16,8 @@ use token_data::{
     get_token_b, get_token_b_address, init_token_a, init_token_b,
 };
 
-fn get_admin(e: &Env) -> Address {
-    e.storage().persistent().get(&DataKey::Admin).unwrap()
+fn get_admin(e: &Env) -> Option<Address> {
+    e.storage().persistent().get(&DataKey::Admin)
 }
 
 fn get_and_add(e: &Env, key: DataKey, amount: i128) {
@@ -334,7 +334,7 @@ pub trait SwapTrait {
         name_token_b: Symbol,
         forward_rate: i128,
         duration: u64,
-    );
+    ) -> Result<(), Error>;
 
     // Deposits to: User, token: Address of token to deposit amount
     // TODO: Add desired execution time
@@ -523,13 +523,19 @@ impl SwapTrait for Swap {
         name_token_b: Symbol,
         forward_rate: i128,
         duration: u64,
-    ) {
-        put_admin(&e, admin);
-        init_token_a(&e, &token_a, name_token_a);
-        init_token_b(&e, &token_b, name_token_b);
-        put_forward_rate(&e, forward_rate);
-        put_init_time(&e);
-        put_time_to_mature(&e, duration);
+    ) -> Result<(), Error> {
+        match get_admin(&e) {
+            Some(_) => Err(Error::ContractAlreadyInitialized),
+            None => {
+                put_admin(&e, admin);
+                init_token_a(&e, &token_a, name_token_a);
+                init_token_b(&e, &token_b, name_token_b);
+                put_forward_rate(&e, forward_rate);
+                put_init_time(&e);
+                put_time_to_mature(&e, duration);
+                Ok(())
+            }
+        }
     }
 
     fn deposit(
@@ -798,7 +804,7 @@ impl SwapTrait for Swap {
 
     // See admin
     fn admin(e: Env) -> Address {
-        get_admin(&e)
+        get_admin(&e).unwrap()
     }
 
     fn near_leg(e: Env) -> Result<PriceData, Error> {
@@ -822,7 +828,7 @@ impl SwapTrait for Swap {
 
     fn set_spot(e: Env, to: Address, amount: i128) -> Result<(), Error> {
         to.require_auth();
-        let admin_address = get_admin(&e);
+        let admin_address = get_admin(&e).unwrap();
         if to != admin_address {
             return Err(Error::Unauthorized);
         }

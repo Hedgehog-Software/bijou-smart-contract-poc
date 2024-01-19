@@ -16,6 +16,7 @@ pub enum Error {
     ContractStillOpen = 10,
     AlreadyRepaid = 11,
     Unauthorized = 12,
+    ContractAlreadyInitialized = 13,
 }
 
 // pub enum State {
