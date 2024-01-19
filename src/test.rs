@@ -107,6 +107,37 @@ fn test_init() {
 }
 
 #[test]
+#[should_panic]
+fn test_re_init() {
+    let forward_rate: i128 = 100_000_000_000_000;
+    let SwapTest {
+        token_admin,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+}
+
+#[test]
 fn test_deposit() {
     let forward_rate: i128 = 100_000;
     let SwapTest {
