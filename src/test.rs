@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::constants::{SCALE, TIME_TO_EXEC, TIME_TO_MATURE, TIME_TO_REPAY};
+use crate::constants::{SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
 use crate::storage_types::User;
 use crate::SwapClient;
 
@@ -656,7 +656,7 @@ fn test_reclaim() {
     contract.withdraw(&user_b);
     assert_eq!(token_b.balance(&user_b), 880);
 
-    SwapTest::add_time(&e, TIME_TO_MATURE + TIME_TO_REPAY);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 100);
     assert_eq!(token_b.balance(&user_b), 980);
@@ -759,7 +759,7 @@ fn test_liquidate_repay() {
     contract.swap(&user_a);
     contract.swap(&user_b);
     contract.repay(&user_a, &token_b.address, &800);
-    SwapTest::add_time(&e, TIME_TO_MATURE + TIME_TO_REPAY);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
     assert_eq!(token_a.balance(&user_b), 900);
     let reward_amount = contract.liq_adm(&user_a, &user_b, &forward_rate);
     assert_eq!(reward_amount, 1);
