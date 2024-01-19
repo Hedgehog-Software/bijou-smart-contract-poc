@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype,contracterror, Address,Symbol};
+use soroban_sdk::{contracterror, contracttype, Address, Symbol};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -14,13 +14,15 @@ pub enum Error {
     NearLegNotExecuted = 8,
     InvalidToken = 9,
     ContractStillOpen = 10,
+    AlreadyRepaid = 11,
+    Unauthorized = 12,
 }
 
-pub enum State {
-    Initiation = 1,
-    Execution = 2,
-    Completion = 3,
-}
+// pub enum State {
+//     Initiation = 1,
+//     Execution = 2,
+//     Completion = 3,
+// }
 
 //quoted asset definition
 #[contracttype]
@@ -52,6 +54,7 @@ pub struct User {
 #[derive(Clone, PartialEq, Debug)]
 #[contracttype]
 pub struct Token {
+    pub name: Symbol,
     pub address: Address,
     pub deposited_amount: i128,
     pub swapped_amount: i128,
@@ -63,12 +66,14 @@ pub struct Token {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
+    Admin,
     TokenA,
     TokenB,
     Exp,
     SpotRate,
     ForwardRate,
     InitTime,
+    TimeToMature,
     DepositedToken(Address),
     DepositedAmount(Address),
     Collateral(Address),
