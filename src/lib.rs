@@ -216,7 +216,8 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
             // If user deposited a then it swapped b
             // User a needs to have 150 of the corresponding to token b in its collateral
             // we need to convert swapped amount into token a
-            let min_collateral = ((COLLATERAL_BUFFER * swapped_amount) / forward_rate) / SCALE;
+            let min_collateral =
+                convert_amount_token_b_to_a(COLLATERAL_BUFFER * swapped_amount, forward_rate);
             let curr_collateral = convert_amount_token_b_to_a(collateral, spot_price);
             reward_amount = collateral / 100;
 
@@ -225,7 +226,8 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
                 transfer_a(&e, &from, reward_amount);
             }
         } else {
-            let min_collateral = (COLLATERAL_BUFFER * swapped_amount * forward_rate) / SCALE;
+            let min_collateral =
+                convert_amount_token_a_to_b(COLLATERAL_BUFFER * swapped_amount, forward_rate);
             let curr_collateral = convert_amount_token_a_to_b(collateral, spot_price);
             reward_amount = collateral / 100;
 
