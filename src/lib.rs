@@ -297,6 +297,11 @@ fn get_user_amount_to_repay(e: &Env, to: &Address) -> i128 {
     repay_amount
 }
 
+fn is_authorized(e: &Env, to: &Address) -> bool {
+    let admin_address = get_admin(&e).unwrap();
+    to.clone() == admin_address
+}
+
 //Utils
 fn convert_amount_token_a_to_b(amount: i128, rate: i128) -> i128 {
     amount * rate / SCALE
@@ -390,7 +395,7 @@ pub trait SwapTrait {
     // Reward amount if address liquidated, 0 if it was not or collateral was too low
     fn liquidate(e: Env, to: Address, from: Address) -> i128;
 
-    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> i128;
+    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> Result<i128, Error>;
 
     // To repay the amount previously swapped
     //
@@ -460,7 +465,7 @@ pub trait SwapTrait {
     //
     // # Returns
     //
-    // Admin address
+    // Admin address or Panic if None
     fn admin(e: Env) -> Address;
 
     // Returns the two tokens and its balances
@@ -713,9 +718,14 @@ impl SwapTrait for Swap {
         liquidate_user(&e, &to, &from, spot_price)
     }
 
-    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> i128 {
+    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> Result<i128, Error> {
         from.require_auth();
-        liquidate_user(&e, &to, &from, spot_price)
+
+        if !is_authorized(&e, &from) {
+            return Err(Error::Unauthorized);
+        }
+
+        Ok(liquidate_user(&e, &to, &from, spot_price))
     }
 
     fn repay(e: Env, to: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
@@ -828,10 +838,11 @@ impl SwapTrait for Swap {
 
     fn set_spot(e: Env, to: Address, amount: i128) -> Result<(), Error> {
         to.require_auth();
-        let admin_address = get_admin(&e).unwrap();
-        if to != admin_address {
+
+        if !is_authorized(&e, &to) {
             return Err(Error::Unauthorized);
         }
+
         put_spot_rate(&e, amount);
         Ok(())
     }
