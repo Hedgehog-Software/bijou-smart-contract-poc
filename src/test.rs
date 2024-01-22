@@ -756,9 +756,9 @@ fn test_liquidate_swap() {
     contract.swap(&user_a);
     contract.swap(&user_b);
     assert_eq!(token_a.balance(&user_b), 900);
-    let reward_amount = contract.liq_adm(&user_a, &user_b, &forward_rate);
+    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
     assert_eq!(reward_amount, 1);
-    assert_eq!(token_a.balance(&user_b), 901);
+    assert_eq!(token_a.balance(&token_admin), 1);
 }
 
 #[test]
@@ -792,9 +792,9 @@ fn test_liquidate_repay() {
     contract.repay(&user_a, &token_b.address, &800);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     assert_eq!(token_a.balance(&user_b), 900);
-    let reward_amount = contract.liq_adm(&user_a, &user_b, &forward_rate);
+    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
     assert_eq!(reward_amount, 1);
-    assert_eq!(token_a.balance(&user_b), 901);
+    assert_eq!(token_a.balance(&token_admin), 1);
 }
 
 #[test]
