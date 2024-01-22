@@ -325,6 +325,8 @@ pub trait SwapTrait {
     // * `admin` - Address of admin
     // * `token_a` - Address of token A to swap
     // * `token_b` - Address of token B to swap
+    // * `name_token_a` - Symbol of token A to swap,
+    // * `name_token_b` - Symbol of token B to swap,
     // * `forward_rate` - forward rate
     // * `duration` - Contract duration until the contract matures
     // # Returns
