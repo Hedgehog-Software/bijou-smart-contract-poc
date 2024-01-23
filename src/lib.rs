@@ -9,7 +9,7 @@ use core::cmp::min;
 
 use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol};
-use storage_types::{Asset, DataKey, Error, PriceData, Token, User};
+use storage_types::{Asset, DataKey, Error, PriceData, State, Token, User};
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
     add_token_swapped_amount, add_token_withdrawn_amount, get_token_a, get_token_a_address,
@@ -238,6 +238,23 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
         }
     }
     reward_amount
+}
+
+fn get_state(e: &Env) -> State {
+    let ledger_timestamp = e.ledger().timestamp();
+    let init_time: u64 = get_init_time(&e);
+    let time_to_mature = get_time_to_mature(&e);
+    let spot_rate = get_spot_rate(&e);
+    let time_to_deposit = init_time + TIME_TO_EXEC;
+    let time_to_swap = time_to_deposit + time_to_mature;
+    let time_limit = time_to_swap + TIME_TO_REPAY;
+
+    match ledger_timestamp {
+        ts if ts < time_to_deposit || spot_rate == 0 => State::Deposit,
+        ts if ts >= time_to_deposit && ts < time_to_swap => State::Swap,
+        ts if ts >= time_to_swap && ts < time_limit => State::Repay,
+        _ => State::Withdraw,
+    }
 }
 
 // Oracle
@@ -487,8 +504,14 @@ pub trait SwapTrait {
     // # Returns
     //
     // None    // * `to` - Address of user
-
     fn set_spot(e: Env, to: Address, rate: i128) -> Result<(), Error>;
+
+    // Returns the current swap state
+    //
+    // # Returns
+    //
+    // Contract State
+    fn state(e: Env) -> State;
 }
 
 #[contract]
@@ -822,5 +845,9 @@ impl SwapTrait for Swap {
 
         put_spot_rate(&e, amount);
         Ok(())
+    }
+
+    fn state(e: Env) -> State {
+        get_state(&e)
     }
 }
