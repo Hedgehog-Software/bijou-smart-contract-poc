@@ -1,7 +1,9 @@
 use soroban_sdk::{Address, Env, Symbol};
-use storage_types::{DataKey, Token};
+use storage_types::DataKey;
+use types::token::Token;
 
 use crate::storage_types;
+use crate::types;
 
 pub fn init_token_a(e: &Env, token: &Address, name: Symbol) {
     e.storage().instance().set(

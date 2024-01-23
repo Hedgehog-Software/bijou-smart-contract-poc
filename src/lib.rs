@@ -4,16 +4,20 @@ mod constants;
 mod storage_types;
 mod test;
 mod token_data;
+mod types;
 
 use core::cmp::min;
 
 use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol};
-use storage_types::{Asset, DataKey, Error, PriceData, State, Token, User};
+use storage_types::DataKey;
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
     add_token_swapped_amount, add_token_withdrawn_amount, get_token_a, get_token_a_address,
     get_token_b, get_token_b_address, init_token_a, init_token_b,
+};
+use types::{
+    asset::Asset, error::Error, price_data::PriceData, state::State, token::Token, user::User,
 };
 
 fn get_admin(e: &Env) -> Option<Address> {
