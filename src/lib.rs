@@ -491,31 +491,6 @@ pub trait SwapTrait {
     fn set_spot(e: Env, to: Address, rate: i128) -> Result<(), Error>;
 }
 
-// Users can monitor the contract
-// ForwardRate and SpotRate includes the scale
-// Initiation  State
-// - Users can deposit amount and collateral
-// -
-// After x time contract gets in the execition state (Fixed now, custom in the future)
-// > Get spot rate
-// > Change state
-// Execution state
-// - User can deposit collateral only to mantain its position
-// - User can be liqudated
-// - User can swap currency (Using spot rate)
-// -
-// After Exp time contract reaches maturity
-// - User has 48 hours to deposit
-// - User must deposit the swapped amount (Using forward rate)
-// - User can deposit colateral
-// - User can be liqudated
-// - User can withdraw its initial deposit after having deposited the swapped
-// - User can refund (Excess in the deposited currency) (And clolateral)
-//
-// After 48 hours
-// - User can withdraw the original amount anytime
-//
-
 #[contract]
 struct Swap;
 
