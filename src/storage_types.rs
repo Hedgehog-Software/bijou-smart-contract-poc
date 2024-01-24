@@ -17,6 +17,8 @@ pub enum DataKey {
     ForwardRate,
     InitTime,
     TimeToMature,
+    PositionA,
+    PositionB,
     DepositedToken(Address),
     DepositedAmount(Address),
     Collateral(Address),
