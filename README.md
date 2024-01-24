@@ -71,8 +71,16 @@ soroban contract invoke --id $contract_id --network testnet -- withdraw --to ali
 soroban contract invoke --id $contract_id --network testnet -- withdraw --to bob
 ```
 
+-----------------------
+# Install WASM to use in the deployer
+```
+soroban contract install --wasm ./target/wasm32-unknown-unknown/release/swap_contract.wasm --network testnet
+```
+Returns contract wasm ex: `d6000267f42d63bb6c845cc62bd616d11d446bc97b2b7ec25a2c43e98d4307f0`
 
 
+
+------------------------
 # Using custom tokens
 ------------------------
 # Deploy token
