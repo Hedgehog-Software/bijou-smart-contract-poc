@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::constants::{SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
-use crate::types::{state::State, user::User};
+use crate::types::user::User;
 use crate::SwapClient;
 
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
@@ -138,6 +138,51 @@ fn test_re_init() {
 }
 
 #[test]
+fn test_init_pos() {
+    let forward_rate: i128 = 100_000_000_000_000;
+    let SwapTest {
+        token_admin,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    contract.init_pos(&token_admin, &100, &50, &100, &100);
+}
+#[test]
+#[should_panic]
+fn test_init_pos_panic() {
+    let forward_rate: i128 = 100_000_000_000_000;
+    let SwapTest {
+        token_admin,
+        token_a,
+        token_b,
+        contract,
+        user_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    contract.init_pos(&user_a, &100, &50, &100, &100);
+}
+
+#[test]
 fn test_deposit() {
     let forward_rate: i128 = 100_000;
     let SwapTest {
@@ -158,6 +203,7 @@ fn test_deposit() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     let (amount_a, collateral_a) = contract.deposit(&user_a, &token_a.address, &100, &10);
     let (amount_b, collateral_b) = contract.deposit(&user_b, &token_b.address, &200, &20);
 
@@ -168,6 +214,60 @@ fn test_deposit() {
 
     assert_eq!(token_a.balance(&user_a), 890);
     assert_eq!(token_b.balance(&user_b), 780);
+}
+
+#[test]
+#[should_panic]
+fn test_deposit_wrong_amount() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        token_admin,
+        user_a,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
+    contract.deposit(&user_a, &token_a.address, &200, &15);
+}
+
+#[test]
+#[should_panic]
+fn test_deposit_all_positions_closed() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    token_admin_client_a.mint(&user_b, &1000);
+    contract.init_pos(&token_admin, &1, &1, &100, &200);
+    contract.deposit(&user_a, &token_a.address, &100, &15);
+    contract.deposit(&user_b, &token_a.address, &100, &15);
 }
 
 #[test]
@@ -193,6 +293,7 @@ fn test_mature_date_error_withdraw() {
         &forward_rate,
         &10000,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.withdraw(&user_a);
@@ -221,6 +322,7 @@ fn test_mature_date_error_reclaim_col() {
         &forward_rate,
         &10000,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.reclaim_col(&user_a);
@@ -249,6 +351,7 @@ fn test_mature_date_error_reclaim() {
         &forward_rate,
         &10000,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.reclaim(&user_a);
@@ -344,6 +447,7 @@ fn test_deposit_amount_after_near_leg() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.set_spot(&user_a, &forward_rate);
     contract.deposit(&user_a, &token_a.address, &100, &15);
 }
@@ -368,6 +472,7 @@ fn test_deposit_collateral_after_near_leg() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.set_spot(&token_admin, &forward_rate);
     let (amount_a, collateral_a) = contract.deposit(&user_a, &token_a.address, &0, &50);
@@ -397,6 +502,7 @@ fn test_swap() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
 
@@ -429,6 +535,8 @@ fn test_repay_a() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -462,6 +570,7 @@ fn test_repay_b() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -497,6 +606,7 @@ fn test_repay_error() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -529,6 +639,7 @@ fn test_repay_instances() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -563,6 +674,7 @@ fn test_balance() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -605,7 +717,7 @@ fn test_withdraw_a() {
         &forward_rate,
         &0,
     );
-
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -641,6 +753,7 @@ fn test_withdraw_b() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -676,6 +789,7 @@ fn test_reclaim() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     SwapTest::add_time(&e, TIME_TO_EXEC);
@@ -714,6 +828,7 @@ fn test_reclaim_collateral() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
@@ -749,6 +864,7 @@ fn test_liquidate_swap() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &900, &900);
     contract.deposit(&user_a, &token_a.address, &900, &100);
     contract.deposit(&user_b, &token_b.address, &900, &100);
     SwapTest::add_time(&e, TIME_TO_EXEC);
@@ -783,6 +899,7 @@ fn test_liquidate_repay() {
         &forward_rate,
         &0,
     );
+    contract.init_pos(&token_admin, &100, &50, &900, &900);
     contract.deposit(&user_a, &token_a.address, &900, &100);
     contract.deposit(&user_b, &token_b.address, &900, &100);
     SwapTest::add_time(&e, TIME_TO_EXEC);
@@ -829,6 +946,13 @@ fn test_forward_smaller_than_spot() {
         &symbol_short!("USDC"),
         &forward_rate,
         &0,
+    );
+    contract.init_pos(
+        &token_admin,
+        &100,
+        &50,
+        &(10_000 * decimals),
+        &(10_000 * decimals),
     );
     contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
     contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &1_000);
@@ -888,6 +1012,13 @@ fn test_forward_bigger_than_spot() {
         &symbol_short!("USD"),
         &forward_rate,
         &0,
+    );
+    contract.init_pos(
+        &token_admin,
+        &100,
+        &50,
+        &(10_000 * decimals),
+        &(10_000 * decimals),
     );
     contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
     contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &1_000);
