@@ -1,6 +1,7 @@
 #![no_std]
 
 mod constants;
+mod position_data;
 mod storage_types;
 mod test;
 mod token_data;
@@ -9,6 +10,9 @@ mod types;
 use core::cmp::min;
 
 use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use position_data::{
+    are_positions_open, get_position_data, init_position_a, init_position_b, ocupy_one_position,
+};
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol};
 use storage_types::DataKey;
 use token_data::{
@@ -352,7 +356,7 @@ pub trait SwapTrait {
     // * `duration` - Contract duration until the contract matures
     // # Returns
     //
-    // None
+    // None or Error
     fn initialize(
         e: Env,
         admin: Address,
@@ -362,6 +366,27 @@ pub trait SwapTrait {
         name_token_b: Symbol,
         forward_rate: i128,
         duration: u64,
+    ) -> Result<(), Error>;
+
+    // Set the positions values
+    //
+    // # Arguments
+    //
+    // * `from` - Address of caller (Only admin can initialize the positions),
+    // * `positions_token_a` - Quantity of positions of token A,
+    // * `positions_token_b` - Quantity of positions of token B,
+    // * `amount_deposit_token_a` - Amount to deposit in each position of token A,
+    // * `amount_deposit_token_b` - Amount to deposit in each position of token B,
+    // # Returns
+    //
+    // None or Error
+    fn init_pos(
+        e: Env,
+        from: Address,
+        positions_token_a: u64,
+        positions_token_b: u64,
+        amount_deposit_token_a: i128,
+        amount_deposit_token_b: i128,
     ) -> Result<(), Error>;
 
     // Deposits to: User, token: Address of token to deposit amount
@@ -547,6 +572,22 @@ impl SwapTrait for Swap {
         }
     }
 
+    fn init_pos(
+        e: Env,
+        from: Address,
+        positions_token_a: u64,
+        positions_token_b: u64,
+        amount_deposit_token_a: i128,
+        amount_deposit_token_b: i128,
+    ) -> Result<(), Error> {
+        if !is_authorized(&e, &from) {
+            return Err(Error::Unauthorized);
+        }
+        init_position_a(&e, positions_token_a, amount_deposit_token_a);
+        init_position_b(&e, positions_token_b, amount_deposit_token_b);
+        Ok(())
+    }
+
     fn deposit(
         e: Env,
         to: Address,
@@ -556,14 +597,24 @@ impl SwapTrait for Swap {
     ) -> Result<(i128, i128), Error> {
         // Depositor needs to authorize the deposit
         to.require_auth();
-        let near_leg_executed = has_near_leg_executed(&e);
-
-        if near_leg_executed && amount != 0 {
-            return Err(Error::CollateralOnlyCanBeDeposited);
-        }
 
         if !is_valid_token(&e, token.clone()) {
             return Err(Error::InvalidToken);
+        }
+
+        let near_leg_executed = has_near_leg_executed(&e);
+        let position_data = get_position_data(&e, &token);
+
+        if !near_leg_executed && !are_positions_open(&position_data) {
+            return Err(Error::AllPositionsAreUsed);
+        }
+
+        if !near_leg_executed && amount != position_data.deposit_amount {
+            return Err(Error::DepositAmountDoesntMatchPosition);
+        }
+
+        if near_leg_executed && amount != 0 {
+            return Err(Error::CollateralOnlyCanBeDeposited);
         }
 
         match get_deposited_token(&e, &to) {
@@ -579,6 +630,7 @@ impl SwapTrait for Swap {
             token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
             put_deposited_amount(&e, &to, amount);
             add_token_deposited_amount(&e, &token, amount);
+            ocupy_one_position(&e, &token, &position_data);
         }
 
         if collateral != 0 {
