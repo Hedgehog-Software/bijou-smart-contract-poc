@@ -17,4 +17,7 @@ pub enum Error {
     AlreadyRepaid = 11,
     Unauthorized = 12,
     ContractAlreadyInitialized = 13,
+    PositionsAlreadyInitialized = 14,
+    DepositAmountDoesntMatchPosition = 15,
+    AllPositionsAreUsed = 16,
 }
