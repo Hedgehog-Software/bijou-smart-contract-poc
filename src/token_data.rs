@@ -44,8 +44,8 @@ pub fn get_token_b(e: &Env) -> Token {
 }
 
 fn get_token(e: &Env, token: &Address) -> Token {
-    let token_a = get_token_a(&e).address;
-    let key = match token_a == token.clone() {
+    let token_a_address = get_token_a_address(&e);
+    let key = match token_a_address == token.clone() {
         true => DataKey::TokenA,
         false => DataKey::TokenB,
     };
