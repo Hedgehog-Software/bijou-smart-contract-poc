@@ -1,6 +1,7 @@
 #![no_std]
 
 mod constants;
+mod position;
 mod position_data;
 mod storage_types;
 mod test;
@@ -11,6 +12,7 @@ mod user;
 use core::cmp::min;
 
 use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use position::{create_position, set_position_valid};
 use position_data::{
     are_positions_open, get_position_data, init_position_a, init_position_b, ocupy_one_position,
 };
@@ -25,7 +27,10 @@ use types::{
     asset::Asset, error::Error, price_data::PriceData, state::State, token::Token, user::User,
 };
 use user::{
-    get_collateral, get_deposited_amount, get_deposited_token, get_returned_amount, get_swapped_amount, get_user_balance, get_user_deposit, get_withdrawn_collateral, has_not_repaid, is_liquidated, put_collateral, put_deposited_amount, put_deposited_token, put_returned_amount, put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral
+    get_collateral, get_deposited_amount, get_deposited_token, get_returned_amount,
+    get_swapped_amount, get_user_balance, get_user_deposit, get_withdrawn_collateral,
+    has_not_repaid, is_liquidated, put_collateral, put_deposited_amount, put_deposited_token,
+    put_returned_amount, put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral,
 };
 
 fn get_admin(e: &Env) -> Option<Address> {
@@ -229,6 +234,20 @@ fn is_valid_token(e: &Env, token: Address) -> bool {
     let token_b_address = get_token_b_address(&e);
     token == token_a_address || token == token_b_address
 }
+
+// Deposit
+// fn handle_amount_deposit(e: &Env, to: &Address, token: &Address, amount: i128) {
+//     if !near_leg_executed && amount != 0 {
+//         let position_index = create_position(&e, &to, &token);
+
+//         token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
+//         put_deposited_amount(&e, &to, amount);
+//         add_token_deposited_amount(&e, &token, amount);
+//         ocupy_one_position(&e, &token, &position_data);
+
+//         set_position_valid(&e, position_index, &token);
+//     }
+// }
 
 pub trait SwapTrait {
     // Sets the token contract addresses for this pooli128
@@ -483,7 +502,6 @@ impl SwapTrait for Swap {
         amount: i128,
         collateral: i128,
     ) -> Result<(i128, i128), Error> {
-        // Depositor needs to authorize the deposit
         to.require_auth();
 
         if !is_valid_token(&e, token.clone()) {
@@ -514,11 +532,16 @@ impl SwapTrait for Swap {
             None => put_deposited_token(&e, &to, &token),
         }
 
+        // handle_amount_deposit(&e, &to, &token, amount);
         if !near_leg_executed && amount != 0 {
+            let position_index = create_position(&e, &to, &token);
+
             token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
             put_deposited_amount(&e, &to, amount);
             add_token_deposited_amount(&e, &token, amount);
             ocupy_one_position(&e, &token, &position_data);
+
+            set_position_valid(&e, position_index, &token);
         }
 
         if collateral != 0 {
@@ -674,8 +697,6 @@ impl SwapTrait for Swap {
 
     fn repay(e: Env, to: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
         to.require_auth();
-
-        // TODO: Avoid user placing more money than expected
 
         if !is_valid_token(&e, token.clone()) {
             return Err(Error::InvalidToken);
