@@ -19,6 +19,8 @@ pub enum DataKey {
     TimeToMature,
     PositionA,
     PositionB,
+    UsedPositionsA,
+    UsedPositionsB,
     DepositedToken(Address),
     DepositedAmount(Address),
     Collateral(Address),
