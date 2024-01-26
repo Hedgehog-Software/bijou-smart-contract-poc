@@ -20,4 +20,5 @@ pub enum Error {
     PositionsAlreadyInitialized = 14,
     DepositAmountDoesntMatchPosition = 15,
     AllPositionsAreUsed = 16,
+    NotEnoughtPositionsUsed = 17
 }
