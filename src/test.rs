@@ -7,7 +7,7 @@ use crate::SwapClient;
 
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{symbol_short, token, Address, Env};
+use soroban_sdk::{symbol_short, token, Address, Env, Vec};
 use token::Client as TokenClient;
 
 fn create_token_contract<'a>(
@@ -512,6 +512,109 @@ fn test_swap() {
     let swapped_amount = contract.swap(&user_a);
     assert_eq!(swapped_amount, 100);
     assert_eq!(token_b.balance(&user_a), 100);
+
+    assert_eq!(token_a.balance(&user_b), 0);
+    let swapped_amount = contract.swap(&user_b);
+    assert_eq!(swapped_amount, 100);
+    assert_eq!(token_a.balance(&user_b), 100);
+}
+
+#[test]
+fn test_swap_with_order() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    let user_c = Address::generate(&e);
+    assert_ne!(user_a, user_c);
+
+    token_admin_client_a.mint(&user_c, &1000);
+
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_c, &token_a.address, &100, &10);
+    contract.deposit(&user_b, &token_b.address, &200, &20);
+
+    contract.set_spot(&token_admin, &forward_rate);
+
+    assert_eq!(token_b.balance(&user_a), 0);
+    let swapped_amount = contract.swap(&user_a);
+    assert_eq!(swapped_amount, 100);
+    assert_eq!(token_b.balance(&user_a), 100);
+
+    assert_eq!(token_a.balance(&user_b), 0);
+    let swapped_amount = contract.swap(&user_b);
+    assert_eq!(swapped_amount, 200);
+    assert_eq!(token_a.balance(&user_b), 200);
+
+    let swapped_amount = contract.swap(&user_c);
+    assert_eq!(swapped_amount, 100);
+    assert_eq!(token_b.balance(&user_c), 100);
+}
+
+#[test]
+fn test_swap_with_order_not_enough() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &0,
+    );
+    let user_c = Address::generate(&e);
+    token_admin_client_a.mint(&user_c, &1000);
+
+    contract.init_pos(&token_admin, &100, &50, &100, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_c, &token_a.address, &100, &10);
+    contract.deposit(&user_b, &token_b.address, &100, &10);
+
+    contract.set_spot(&token_admin, &forward_rate);
+
+    assert_eq!(token_b.balance(&user_a), 0);
+    let swapped_amount = contract.swap(&user_a);
+    assert_eq!(swapped_amount, 100);
+    assert_eq!(token_b.balance(&user_a), 100);
+
+    assert_eq!(token_a.balance(&user_b), 0);
+    let swapped_amount = contract.swap(&user_b);
+    assert_eq!(swapped_amount, 100);
+    assert_eq!(token_a.balance(&user_b), 100);
+
+    let swapped_amount = contract.swap(&user_c);
+    assert_eq!(swapped_amount, 0);
+    assert_eq!(token_b.balance(&user_c), 0);
 }
 
 #[test]
@@ -862,7 +965,7 @@ fn test_liquidate_swap() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &100,
     );
     contract.init_pos(&token_admin, &100, &50, &900, &900);
     contract.deposit(&user_a, &token_a.address, &900, &100);
@@ -875,6 +978,43 @@ fn test_liquidate_swap() {
     let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
     assert_eq!(reward_amount, 1);
     assert_eq!(token_a.balance(&token_admin), 1);
+}
+
+#[test]
+fn test_no_liquidate_swap() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &100,
+    );
+    token_admin_client_a.mint(&user_a, &100);
+    contract.init_pos(&token_admin, &100, &50, &900, &900);
+    contract.deposit(&user_a, &token_a.address, &900, &200);
+    contract.deposit(&user_b, &token_b.address, &900, &100);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.set_spot(&token_admin, &forward_rate);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+    assert_eq!(token_a.balance(&user_b), 900);
+    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
+    assert_eq!(reward_amount, 0);
+    assert_eq!(token_a.balance(&token_admin), 0);
 }
 
 #[test]
@@ -916,10 +1056,6 @@ fn test_liquidate_repay() {
 
 #[test]
 fn test_forward_smaller_than_spot() {
-    // user_a deposits 100, user_b deposits 200
-    // user_a swaps and receives 150 of token_b, user_b receives 100 of token_a
-    // because forward rate is 1 user_a
-    //
     let SwapTest {
         token_admin,
         user_a,
@@ -931,7 +1067,7 @@ fn test_forward_smaller_than_spot() {
         token_admin_client_b,
         ..
     } = SwapTest::setup();
-    let spot_rate: i128 = 191_000_000_000_000; // 1 Token A = 1.5 token B
+    let spot_rate: i128 = 191_000_000_000_000;
     let forward_rate: i128 = 190_000_000_000_000;
     let decimals = 100_000_000;
 
