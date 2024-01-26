@@ -12,11 +12,12 @@ mod user;
 use core::cmp::min;
 
 use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
-use position::{create_position, set_position_valid};
+use position::{create_position, get_used_positions_a, get_used_positions_b, set_position_valid};
 use position_data::{
-    are_positions_open, get_position_data, init_position_a, init_position_b, ocupy_one_position,
+    are_positions_open, get_position_a, get_position_b, get_position_data, init_position_a,
+    init_position_b, ocupy_one_position,
 };
-use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol};
+use soroban_sdk::{contract, contractimpl, log, token, vec, Address, Env, String, Symbol, Vec};
 use storage_types::DataKey;
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
@@ -24,7 +25,8 @@ use token_data::{
     get_token_b, get_token_b_address, init_token_a, init_token_b,
 };
 use types::{
-    asset::Asset, error::Error, price_data::PriceData, state::State, token::Token, user::User,
+    asset::Asset, error::Error, position::Position, price_data::PriceData, state::State,
+    token::Token, user::User,
 };
 use user::{
     get_collateral, get_deposited_amount, get_deposited_token, get_returned_amount,
@@ -137,22 +139,26 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
             // If user deposited a then it swapped b
             // User a needs to have 150 of the corresponding to token b in its collateral
             // we need to convert swapped amount into token a
-            let min_collateral =
-                convert_amount_token_b_to_a(COLLATERAL_BUFFER * swapped_amount, forward_rate);
+            let min_collateral = convert_amount_token_b_to_a(
+                (COLLATERAL_BUFFER * swapped_amount) / 100,
+                forward_rate,
+            );
             let curr_collateral = convert_amount_token_b_to_a(collateral, spot_price);
-            reward_amount = collateral / 100;
 
             if (min_collateral > curr_collateral) || expired_and_not_repaid {
+                reward_amount = collateral / 100;
                 put_is_liquidated(&e, &to, true);
                 transfer_a(&e, &from, reward_amount);
             }
         } else {
-            let min_collateral =
-                convert_amount_token_a_to_b(COLLATERAL_BUFFER * swapped_amount, forward_rate);
+            let min_collateral = convert_amount_token_a_to_b(
+                (COLLATERAL_BUFFER * swapped_amount) / 100,
+                forward_rate,
+            );
             let curr_collateral = convert_amount_token_a_to_b(collateral, spot_price);
-            reward_amount = collateral / 100;
 
             if (min_collateral > curr_collateral) || expired_and_not_repaid {
+                reward_amount = collateral / 100;
                 put_is_liquidated(&e, &to, true);
                 transfer_b(&e, &from, reward_amount);
             }
@@ -248,6 +254,71 @@ fn is_valid_token(e: &Env, token: Address) -> bool {
 //         set_position_valid(&e, position_index, &token);
 //     }
 // }
+
+// Amount that can swap
+//
+
+fn calculate_used_deposited_amount(
+    user: &Address,
+    used_positions: Vec<Position>,
+    total_other_deposited_amount: i128,
+    base_deposit_amount: i128,
+    base_converted_amount: i128,
+) -> i128 {
+    let mut used_amount: i128 = 0;
+    let mut acum = 0;
+
+    for position in used_positions.iter() {
+        if position.is_valid {
+            acum += base_converted_amount;
+            if position.address == user.clone() {
+                used_amount += base_deposit_amount;
+            }
+            if acum >= total_other_deposited_amount {
+                return used_amount;
+            }
+        }
+    }
+
+    used_amount
+}
+
+pub fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
+    let token_a_data = get_token_a(&e);
+    let token_b_data = get_token_b(&e);
+    let position_a = get_position_a(&e);
+    let position_b = get_position_b(&e);
+    let spot_rate = get_spot_rate(&e);
+
+    match token_a_data.address == get_deposited_token(&e, &user).unwrap() {
+        true => {
+            let used_positions_a = get_used_positions_a(&e);
+            let total_other_deposited_amount = token_b_data.deposited_amount;
+            let base_converted_amount =
+                convert_amount_token_a_to_b(position_a.deposit_amount, spot_rate);
+            return calculate_used_deposited_amount(
+                user,
+                used_positions_a,
+                total_other_deposited_amount,
+                position_a.deposit_amount,
+                base_converted_amount,
+            );
+        }
+        false => {
+            let used_positions_b = get_used_positions_b(&e);
+            let total_other_deposited_amount = token_a_data.deposited_amount;
+            let base_converted_amount =
+                convert_amount_token_b_to_a(position_b.deposit_amount, spot_rate);
+            return calculate_used_deposited_amount(
+                user,
+                used_positions_b,
+                total_other_deposited_amount,
+                position_b.deposit_amount,
+                base_converted_amount,
+            );
+        }
+    }
+}
 
 pub trait SwapTrait {
     // Sets the token contract addresses for this pooli128
@@ -448,6 +519,8 @@ pub trait SwapTrait {
     //
     // Contract State
     fn state(e: Env) -> State;
+
+    fn deposits(e: Env) -> (Vec<Position>, Vec<Position>);
 }
 
 #[contract]
@@ -532,16 +605,15 @@ impl SwapTrait for Swap {
             None => put_deposited_token(&e, &to, &token),
         }
 
-        // handle_amount_deposit(&e, &to, &token, amount);
         if !near_leg_executed && amount != 0 {
             let position_index = create_position(&e, &to, &token);
 
             token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
             put_deposited_amount(&e, &to, amount);
             add_token_deposited_amount(&e, &token, amount);
-            ocupy_one_position(&e, &token, &position_data);
 
             set_position_valid(&e, position_index, &token);
+            ocupy_one_position(&e, &token, &position_data);
         }
 
         if collateral != 0 {
@@ -569,8 +641,8 @@ impl SwapTrait for Swap {
 
         if let Some(token) = get_deposited_token(&e, &to) {
             if token == get_token_a_address(&e) {
-                let deposited_amount = get_deposited_amount(&e, &to);
-                let exp_swap_amount = convert_amount_token_a_to_b(deposited_amount, spot_rate);
+                let used_deposited_amount = get_used_deposited_amount(&e, &to);
+                let exp_swap_amount = convert_amount_token_a_to_b(used_deposited_amount, spot_rate);
 
                 let token_b_data = get_token_b(&e);
                 let token_b_available_amount =
@@ -581,8 +653,8 @@ impl SwapTrait for Swap {
                 add_token_swapped_amount(&e, &token_b_data.address, swap_amount);
                 transfer_b(&e, &to, swap_amount);
             } else {
-                let deposited_amount = get_deposited_amount(&e, &to);
-                let exp_swap_amount = convert_amount_token_b_to_a(deposited_amount, spot_rate);
+                let used_deposited_amount = get_used_deposited_amount(&e, &to);
+                let exp_swap_amount = convert_amount_token_b_to_a(used_deposited_amount, spot_rate);
 
                 let token_a_data = get_token_a(&e);
                 let token_a_available_amount =
@@ -814,5 +886,9 @@ impl SwapTrait for Swap {
 
     fn state(e: Env) -> State {
         get_state(&e)
+    }
+
+    fn deposits(e: Env) -> (Vec<Position>, Vec<Position>) {
+        (get_used_positions_a(&e), get_used_positions_b(&e))
     }
 }
