@@ -53,8 +53,8 @@ fn get_token(e: &Env, token: &Address) -> Token {
 }
 
 fn edit_token(e: &Env, token: &Address, data: Token) {
-    let token_a = get_token_a(&e).address;
-    let key = match token_a == token.clone() {
+    let token_a_address = get_token_a_address(&e);
+    let key = match token_a_address == token.clone() {
         true => DataKey::TokenA,
         false => DataKey::TokenB,
     };
