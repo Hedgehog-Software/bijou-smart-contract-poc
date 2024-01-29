@@ -1254,10 +1254,6 @@ fn test_forward_smaller_than_spot() {
 
 #[test]
 fn test_forward_bigger_than_spot() {
-    // user_a deposits 100, user_b deposits 200
-    // user_a swaps and receives 150 of token_b, user_b receives 100 of token_a
-    // because forward rate is 1 user_a
-    //
     let SwapTest {
         e,
         token_admin,
@@ -1270,7 +1266,7 @@ fn test_forward_bigger_than_spot() {
         token_admin_client_b,
         ..
     } = SwapTest::setup();
-    let spot_rate: i128 = 190_000_000_000_000; // 1 Token A = 1.5 token B
+    let spot_rate: i128 = 190_000_000_000_000;
     let forward_rate: i128 = 191_000_000_000_000;
     let decimals = 100_000_000;
 
@@ -1325,7 +1321,7 @@ fn test_forward_bigger_than_spot() {
 }
 
 #[test]
-fn test_appreciation() {
+fn test_liquidate_devaluation() {
     let SwapTest {
         e,
         token_admin,
@@ -1338,12 +1334,12 @@ fn test_appreciation() {
         token_admin_client_b,
         ..
     } = SwapTest::setup();
-    let spot_rate: i128 = 190_000_000_000_000; // 1 Token A = 1.5 token B
+    let spot_rate: i128 = 190_000_000_000_000;
     let forward_rate: i128 = 191_000_000_000_000;
     let decimals = 100_000_000;
 
-    token_admin_client_a.mint(&user_a, &(10_000 * decimals));
-    token_admin_client_b.mint(&user_b, &(10_000 * decimals));
+    token_admin_client_a.mint(&user_a, &(20_000 * decimals));
+    token_admin_client_b.mint(&user_b, &(20_000 * decimals));
 
     contract.initialize(
         &token_admin,
@@ -1352,7 +1348,7 @@ fn test_appreciation() {
         &symbol_short!("GBP"),
         &symbol_short!("USD"),
         &forward_rate,
-        &100,
+        &TIME_TO_REPAY,
     );
     contract.init_pos(
         &token_admin,
@@ -1361,8 +1357,8 @@ fn test_appreciation() {
         &(10_000 * decimals),
         &(10_000 * decimals),
     );
-    contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
-    contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &1_000);
+    contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &(2_000 * decimals));
+    contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &(1_048 * decimals));
     contract.set_spot(&token_admin, &spot_rate);
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
@@ -1371,25 +1367,11 @@ fn test_appreciation() {
     assert_eq!(swapped_amount_a, 1_000_000_000_000);
     assert_eq!(swapped_amount_b, 526_315_789_473);
 
-    assert_eq!(token_b.balance(&user_a), 1_000_000_000_000);
-    assert_eq!(token_a.balance(&user_b), 526_315_789_473);
+    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
+    assert_eq!(reward_amount, 0);
 
-    SwapTest::add_time(&e, 100);
-
-    let repay_a = contract.repay(&user_a, &token_b.address, &1_000_000_000_000);
-    let repay_b = contract.repay(&user_b, &token_a.address, &523_560_209_424);
-
-    assert_eq!(repay_a, (1_000_000_000_000, 1_000_000_000_000));
-    assert_eq!(repay_b, (523_560_209_423, 523_560_209_423));
-
-    SwapTest::add_time(&e, TIME_TO_REPAY);
-
-    let withdrawn_amount_a = contract.withdraw(&user_a);
-    let withdrawn_amount_b = contract.withdraw(&user_b);
-    assert_eq!(withdrawn_amount_a, 523_560_209_424);
-    assert_eq!(withdrawn_amount_b, 999_999_999_997);
-    assert_eq!(token_a.balance(&user_a), 523_560_209_424);
-    assert_eq!(token_b.balance(&user_b), 999_999_999_997);
+    let reward_amount = contract.liq_adm(&user_a, &token_admin, &380_000_000_000_000);
+    assert_eq!(reward_amount, 2_000_000_000);    
 }
 
 #[test]
