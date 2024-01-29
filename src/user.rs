@@ -52,6 +52,13 @@ fn get_withdrawn_amount(e: &Env, to: &Address) -> i128 {
         .unwrap_or_default()
 }
 
+pub fn get_reclaimed_amount(e: &Env, to: &Address) -> i128 {
+    e.storage()
+        .persistent()
+        .get(&DataKey::ReclaimedAmount(to.clone()))
+        .unwrap_or_default()
+}
+
 pub fn is_liquidated(e: &Env, to: &Address) -> bool {
     e.storage()
         .persistent()
@@ -112,6 +119,11 @@ pub fn put_withdrawn_amount(e: &Env, to: &Address, amount: i128) {
 
 pub fn put_returned_amount(e: &Env, to: &Address, amount: i128) {
     let key = DataKey::ReturnedAmount(to.clone());
+    get_and_add(e, key, amount);
+}
+
+pub fn put_reclaimed_amount(e: &Env, to: &Address, amount: i128) {
+    let key = DataKey::ReclaimedAmount(to.clone());
     get_and_add(e, key, amount);
 }
 

@@ -28,6 +28,6 @@ pub enum DataKey {
     ReturnedAmount(Address),
     WithdrawnAmount(Address),
     WithdrawnCollateralAmount(Address),
-    RefundedAmount(Address),
+    ReclaimedAmount(Address),
     IsLiquidated(Address),
 }

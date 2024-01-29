@@ -29,10 +29,11 @@ use types::{
     token::Token, user::User,
 };
 use user::{
-    get_collateral, get_deposited_amount, get_deposited_token, get_returned_amount,
-    get_swapped_amount, get_user_balance, get_user_deposit, get_withdrawn_collateral,
-    has_not_repaid, is_liquidated, put_collateral, put_deposited_amount, put_deposited_token,
-    put_returned_amount, put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral,
+    get_collateral, get_deposited_amount, get_deposited_token, get_reclaimed_amount,
+    get_returned_amount, get_swapped_amount, get_user_balance, get_user_deposit,
+    get_withdrawn_collateral, has_not_repaid, is_liquidated, put_collateral, put_deposited_amount,
+    put_deposited_token, put_reclaimed_amount, put_returned_amount, put_swapped_amount,
+    put_withdrawn_amount, put_withdrawn_collateral,
 };
 
 fn get_admin(e: &Env) -> Option<Address> {
@@ -673,7 +674,6 @@ impl SwapTrait for Swap {
     fn reclaim(e: Env, to: Address) -> Result<i128, Error> {
         to.require_auth();
 
-        // TODO: Make sure the contract was already executed
         if !max_time_reached(&e) {
             return Err(Error::ContractStillOpen);
         }
@@ -687,11 +687,12 @@ impl SwapTrait for Swap {
                 let user_swapped_amount = get_swapped_amount(&e, &to);
                 let amount_token_b_to_a =
                     convert_amount_token_b_to_a(user_swapped_amount, spot_rate);
+                let reclaimed_amount = get_reclaimed_amount(&e, &to);
+                amount = user_deposited_amount - amount_token_b_to_a - reclaimed_amount;
 
-                if user_deposited_amount > amount_token_b_to_a {
-                    amount = user_deposited_amount - amount_token_b_to_a;
-                    add_token_returned_amount(&e, &token, amount);
-                    put_returned_amount(&e, &to, amount);
+                if amount > 0 {
+                    add_token_withdrawn_amount(&e, &token, amount);
+                    put_reclaimed_amount(&e, &to, amount);
                     transfer_a(&e, &to, amount);
                 }
             } else {
@@ -699,11 +700,12 @@ impl SwapTrait for Swap {
                 let user_swapped_amount = get_swapped_amount(&e, &to);
                 let amount_token_a_to_b =
                     convert_amount_token_a_to_b(user_swapped_amount, spot_rate);
+                let reclaimed_amount = get_reclaimed_amount(&e, &to);
+                amount = user_deposited_amount - amount_token_a_to_b - reclaimed_amount;
 
-                if user_deposited_amount > amount_token_a_to_b {
-                    amount = user_deposited_amount - amount_token_a_to_b;
-                    add_token_returned_amount(&e, &token, amount);
-                    put_returned_amount(&e, &to, amount);
+                if amount > 0 {
+                    add_token_withdrawn_amount(&e, &token, amount);
+                    put_reclaimed_amount(&e, &to, amount);
                     transfer_b(&e, &to, amount);
                 }
             }
