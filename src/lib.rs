@@ -17,7 +17,7 @@ use position_data::{
     are_positions_open, get_position_a, get_position_b, get_position_data, init_position_a,
     init_position_b, ocupy_one_position,
 };
-use soroban_sdk::{contract, contractimpl, log, token, vec, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol, Vec};
 use storage_types::DataKey;
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
