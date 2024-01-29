@@ -2,6 +2,7 @@
 extern crate std;
 
 use crate::constants::{SCALE, TIME_TO_EXEC, TIME_TO_MATURE, TIME_TO_REPAY};
+use crate::types::state::State;
 use crate::types::user::User;
 use crate::SwapClient;
 
@@ -1390,30 +1391,38 @@ fn test_appreciation() {
     assert_eq!(token_a.balance(&user_a), 523_560_209_424);
     assert_eq!(token_b.balance(&user_b), 999_999_999_997);
 }
-// #[test]
-// fn test_state() {
-//     let forward_rate: i128 = SCALE;
-//     let SwapTest {
-//         e,
-//         token_admin,
-//         token_a,
-//         token_b,
-//         contract,
-//         ..
-//     } = SwapTest::setup();
-//     contract.initialize(
-//         &token_admin,
-//         &token_a.address,
-//         &token_b.address,
-//         &symbol_short!("USDC"),
-//         &symbol_short!("EURC"),
-//         &forward_rate,
-//         &10,
-//     );
-//     let state = contract.state();
-//     assert_eq!(state, State::Deposit);
-//     contract.set_spot(&token_admin, &1000000);
-//     let state = contract.state();
-//     assert_eq!(state, State::Swap);
-//     SwapTest::add_time(&e, 11);
-// }
+
+#[test]
+fn test_state() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    let state = contract.state();
+    assert_eq!(state, State::Deposit);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.set_spot(&token_admin, &1000000);
+    let state = contract.state();
+    assert_eq!(state, State::Swap);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    let state = contract.state();
+    assert_eq!(state, State::Repay);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+    let state = contract.state();
+    assert_eq!(state, State::Withdraw);
+}
