@@ -521,6 +521,11 @@ pub trait SwapTrait {
     // Contract State
     fn state(e: Env) -> State;
 
+    // Returns the deposits done for token
+    //
+    // # Returns
+    //
+    // A tuple containing arrays of deposits, (deposits token A, deposits token B)
     fn deposits(e: Env) -> (Vec<Position>, Vec<Position>);
 }
 
