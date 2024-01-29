@@ -1,13 +1,13 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::constants::{SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use crate::constants::{SCALE, TIME_TO_EXEC, TIME_TO_MATURE, TIME_TO_REPAY};
 use crate::types::user::User;
 use crate::SwapClient;
 
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{symbol_short, token, Address, Env, Vec};
+use soroban_sdk::{symbol_short, token, Address, Env};
 use token::Client as TokenClient;
 
 fn create_token_contract<'a>(
@@ -66,17 +66,8 @@ impl<'a> SwapTest<'a> {
     }
 
     fn add_time(e: &Env, time: u64) {
-        let blocks = time / 5;
-        let ledger = e.ledger();
-        e.ledger().set(LedgerInfo {
-            timestamp: ledger.timestamp().saturating_add(time),
-            protocol_version: ledger.protocol_version(),
-            sequence_number: ledger.sequence().saturating_add(blocks as u32),
-            network_id: Default::default(),
-            base_reserve: 10,
-            min_persistent_entry_ttl: 999999,
-            min_temp_entry_ttl: 999999,
-            max_entry_ttl: u32::MAX,
+        e.ledger().with_mut(|li| {
+            li.timestamp += time;
         });
     }
 
@@ -291,7 +282,7 @@ fn test_mature_date_error_withdraw() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &10000,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
@@ -356,29 +347,6 @@ fn test_mature_date_error_reclaim() {
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.reclaim(&user_a);
 }
-
-// #[test]
-// fn test_near_leg() {
-//     let forward_rate: i128 = 100_000;
-//     let SwapTest {
-//         token_admin,
-//         token_a,
-//         token_b,
-//         contract,
-//         ..
-//     } = SwapTest::setup();
-//     contract.initialize(
-//         &token_admin,
-//         &token_a.address,
-//         &token_b.address,
-//         &symbol_short!("USDC"),
-//         &symbol_short!("EURC"),
-//         &forward_rate,
-//         &0,
-//     );
-//     let price_data = contract.near_leg();
-//     assert_eq!(price_data.price, 100_000);
-// }
 
 #[test]
 fn test_set_spot_rate() {
@@ -775,7 +743,7 @@ fn test_balance() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
@@ -803,6 +771,7 @@ fn test_balance() {
 fn test_withdraw_a() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
+        e,
         token_admin,
         user_a,
         user_b,
@@ -818,18 +787,21 @@ fn test_withdraw_a() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_a, &token_b.address, &100);
     contract.repay(&user_b, &token_a.address, &100);
     assert_eq!(token_a.balance(&user_a), 890);
     assert_eq!(token_b.balance(&user_a), 0);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
     let withdrawn_amount = contract.withdraw(&user_a);
     assert_eq!(withdrawn_amount, 100);
     assert_eq!(token_a.balance(&user_a), 990);
@@ -839,6 +811,7 @@ fn test_withdraw_a() {
 fn test_withdraw_b() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
+        e,
         token_admin,
         user_a,
         user_b,
@@ -854,17 +827,20 @@ fn test_withdraw_b() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_a, &token_b.address, &100);
     contract.repay(&user_b, &token_a.address, &100);
     assert_eq!(token_b.balance(&user_b), 780);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
     let withdrawn_amount = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount, 100);
     assert_eq!(token_b.balance(&user_b), 880);
@@ -890,7 +866,7 @@ fn test_reclaim() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
@@ -899,21 +875,25 @@ fn test_reclaim() {
     contract.set_spot(&token_admin, &forward_rate);
     let swap_amount = contract.swap(&user_b);
     assert_eq!(swap_amount, 100);
+
+    SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_b, &token_a.address, &100);
     assert_eq!(token_b.balance(&user_b), 780);
-    contract.withdraw(&user_b);
-    assert_eq!(token_b.balance(&user_b), 880);
 
     SwapTest::add_time(&e, TIME_TO_REPAY);
+    contract.withdraw(&user_b);
+    assert_eq!(token_b.balance(&user_b), 880);
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 100);
     assert_eq!(token_b.balance(&user_b), 980);
 }
 
 #[test]
-fn test_reclaim_collateral() {
+#[should_panic]
+fn test_multiple_reclaim() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
+        e,
         token_admin,
         user_a,
         user_b,
@@ -929,14 +909,60 @@ fn test_reclaim_collateral() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_b, &token_b.address, &200, &20);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.set_spot(&token_admin, &forward_rate);
+    let swap_amount = contract.swap(&user_b);
+    assert_eq!(swap_amount, 100);
+
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    contract.repay(&user_b, &token_a.address, &100);
+    assert_eq!(token_b.balance(&user_b), 780);
+
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+    contract.withdraw(&user_b);
+    assert_eq!(token_b.balance(&user_b), 880);
+    let reclaimed_deposit = contract.reclaim(&user_b);
+    assert_eq!(reclaimed_deposit, 100);
+    assert_eq!(token_b.balance(&user_b), 980);
+    contract.reclaim(&user_b);
+}
+
+#[test]
+fn test_reclaim_collateral() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100, &200);
     contract.deposit(&user_a, &token_a.address, &100, &10);
     contract.deposit(&user_b, &token_b.address, &200, &20);
     contract.set_spot(&token_admin, &forward_rate);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_a, &token_b.address, &100);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.withdraw(&user_a);
     assert_eq!(token_a.balance(&user_a), 990);
 
@@ -1037,7 +1063,7 @@ fn test_liquidate_repay() {
         &symbol_short!("USDC"),
         &symbol_short!("EURC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &900, &900);
     contract.deposit(&user_a, &token_a.address, &900, &100);
@@ -1046,17 +1072,19 @@ fn test_liquidate_repay() {
     contract.set_spot(&token_admin, &forward_rate);
     contract.swap(&user_a);
     contract.swap(&user_b);
-    contract.repay(&user_a, &token_b.address, &800);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    contract.repay(&user_a, &token_b.address, &900);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     assert_eq!(token_a.balance(&user_b), 900);
-    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
+    let reward_amount = contract.liq_adm(&user_b, &token_admin, &forward_rate);
     assert_eq!(reward_amount, 1);
-    assert_eq!(token_a.balance(&token_admin), 1);
+    assert_eq!(token_b.balance(&token_admin), 1);
 }
 
 #[test]
 fn test_forward_smaller_than_spot() {
     let SwapTest {
+        e,
         token_admin,
         user_a,
         user_b,
@@ -1081,7 +1109,7 @@ fn test_forward_smaller_than_spot() {
         &symbol_short!("EURC"),
         &symbol_short!("USDC"),
         &forward_rate,
-        &0,
+        &TIME_TO_MATURE,
     );
     contract.init_pos(
         &token_admin,
@@ -1094,6 +1122,8 @@ fn test_forward_smaller_than_spot() {
     contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &1_000);
     contract.set_spot(&token_admin, &spot_rate);
 
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+
     let swapped_amount_a = contract.swap(&user_a);
     let swapped_amount_b = contract.swap(&user_b);
     assert_eq!(swapped_amount_a, 1_000_000_000_000);
@@ -1102,11 +1132,15 @@ fn test_forward_smaller_than_spot() {
     assert_eq!(token_b.balance(&user_a), 1_000_000_000_000);
     assert_eq!(token_a.balance(&user_b), 523_560_209_424);
 
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+
     token_admin_client_a.mint(&user_b, &2755580049);
     let repay_a = contract.repay(&user_a, &token_b.address, &1_000_000_000_000);
     let repay_b = contract.repay(&user_b, &token_a.address, &526_315_789_473);
     assert_eq!(repay_a, (1_000_000_000_000, 1_000_000_000_000));
     assert_eq!(repay_b, (526_315_789_473, 526_315_789_473));
+
+    SwapTest::add_time(&e, TIME_TO_REPAY);
 
     let withdrawn_amount_a = contract.withdraw(&user_a);
     let withdrawn_amount_b = contract.withdraw(&user_b);
@@ -1123,6 +1157,7 @@ fn test_forward_bigger_than_spot() {
     // because forward rate is 1 user_a
     //
     let SwapTest {
+        e,
         token_admin,
         user_a,
         user_b,
@@ -1147,7 +1182,7 @@ fn test_forward_bigger_than_spot() {
         &symbol_short!("GBP"),
         &symbol_short!("USD"),
         &forward_rate,
-        &0,
+        &100,
     );
     contract.init_pos(
         &token_admin,
@@ -1159,6 +1194,7 @@ fn test_forward_bigger_than_spot() {
     contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
     contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &1_000);
     contract.set_spot(&token_admin, &spot_rate);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
 
     let swapped_amount_a = contract.swap(&user_a);
     let swapped_amount_b = contract.swap(&user_b);
@@ -1168,11 +1204,15 @@ fn test_forward_bigger_than_spot() {
     assert_eq!(token_b.balance(&user_a), 1_000_000_000_000);
     assert_eq!(token_a.balance(&user_b), 526_315_789_473);
 
+    SwapTest::add_time(&e, 100);
+
     let repay_a = contract.repay(&user_a, &token_b.address, &1_000_000_000_000);
     let repay_b = contract.repay(&user_b, &token_a.address, &523_560_209_424);
 
     assert_eq!(repay_a, (1_000_000_000_000, 1_000_000_000_000));
     assert_eq!(repay_b, (523_560_209_423, 523_560_209_423));
+
+    SwapTest::add_time(&e, TIME_TO_REPAY);
 
     let withdrawn_amount_a = contract.withdraw(&user_a);
     let withdrawn_amount_b = contract.withdraw(&user_b);
@@ -1182,6 +1222,73 @@ fn test_forward_bigger_than_spot() {
     assert_eq!(token_b.balance(&user_b), 999_999_999_997);
 }
 
+#[test]
+fn test_appreciation() {
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        token_admin_client_b,
+        ..
+    } = SwapTest::setup();
+    let spot_rate: i128 = 190_000_000_000_000; // 1 Token A = 1.5 token B
+    let forward_rate: i128 = 191_000_000_000_000;
+    let decimals = 100_000_000;
+
+    token_admin_client_a.mint(&user_a, &(10_000 * decimals));
+    token_admin_client_b.mint(&user_b, &(10_000 * decimals));
+
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("GBP"),
+        &symbol_short!("USD"),
+        &forward_rate,
+        &100,
+    );
+    contract.init_pos(
+        &token_admin,
+        &100,
+        &50,
+        &(10_000 * decimals),
+        &(10_000 * decimals),
+    );
+    contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
+    contract.deposit(&user_b, &token_b.address, &(10_000 * decimals), &1_000);
+    contract.set_spot(&token_admin, &spot_rate);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+
+    let swapped_amount_a = contract.swap(&user_a);
+    let swapped_amount_b = contract.swap(&user_b);
+    assert_eq!(swapped_amount_a, 1_000_000_000_000);
+    assert_eq!(swapped_amount_b, 526_315_789_473);
+
+    assert_eq!(token_b.balance(&user_a), 1_000_000_000_000);
+    assert_eq!(token_a.balance(&user_b), 526_315_789_473);
+
+    SwapTest::add_time(&e, 100);
+
+    let repay_a = contract.repay(&user_a, &token_b.address, &1_000_000_000_000);
+    let repay_b = contract.repay(&user_b, &token_a.address, &523_560_209_424);
+
+    assert_eq!(repay_a, (1_000_000_000_000, 1_000_000_000_000));
+    assert_eq!(repay_b, (523_560_209_423, 523_560_209_423));
+
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+
+    let withdrawn_amount_a = contract.withdraw(&user_a);
+    let withdrawn_amount_b = contract.withdraw(&user_b);
+    assert_eq!(withdrawn_amount_a, 523_560_209_424);
+    assert_eq!(withdrawn_amount_b, 999_999_999_997);
+    assert_eq!(token_a.balance(&user_a), 523_560_209_424);
+    assert_eq!(token_b.balance(&user_b), 999_999_999_997);
+}
 // #[test]
 // fn test_state() {
 //     let forward_rate: i128 = SCALE;
