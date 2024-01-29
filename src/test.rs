@@ -889,7 +889,61 @@ fn test_reclaim() {
 }
 
 #[test]
-#[should_panic]
+fn test_full_reclaim() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_b,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    let user_c = Address::generate(&e);
+    assert_ne!(user_a, user_c);
+    token_admin_client_b.mint(&user_c, &110);
+
+    contract.init_pos(&token_admin, &100, &50, &100, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_b, &token_b.address, &100, &10);
+    contract.deposit(&user_c, &token_b.address, &100, &10);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.set_spot(&token_admin, &forward_rate);
+    let swap_amount = contract.swap(&user_b);
+    assert_eq!(swap_amount, 100);
+
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    contract.repay(&user_b, &token_a.address, &100);
+    assert_eq!(token_b.balance(&user_b), 890);
+
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+    contract.withdraw(&user_b);
+    assert_eq!(token_b.balance(&user_b), 990);
+    let reclaimed_deposit = contract.reclaim(&user_b);
+    assert_eq!(reclaimed_deposit, 0);
+    assert_eq!(token_b.balance(&user_b), 990);
+
+    contract.withdraw(&user_c);
+    assert_eq!(token_b.balance(&user_c), 0);
+    let reclaimed_deposit = contract.reclaim(&user_c);
+    assert_eq!(reclaimed_deposit, 100);
+    assert_eq!(token_b.balance(&user_c), 100);
+}
+
+#[test]
 fn test_multiple_reclaim() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
@@ -929,7 +983,54 @@ fn test_multiple_reclaim() {
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 100);
     assert_eq!(token_b.balance(&user_b), 980);
-    contract.reclaim(&user_b);
+
+    let reclaimed_deposit = contract.reclaim(&user_b);
+    assert_eq!(reclaimed_deposit, 0);
+    assert_eq!(token_b.balance(&user_b), 980);
+}
+
+#[test]
+fn test_reclaim_for_non_participant() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    let user_c = Address::generate(&e);
+    assert_eq!(token_a.balance(&user_c), 0);
+    assert_eq!(token_b.balance(&user_c), 0);
+
+    contract.init_pos(&token_admin, &100, &50, &100, &200);
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_b, &token_b.address, &200, &20);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.set_spot(&token_admin, &forward_rate);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    contract.repay(&user_a, &token_b.address, &100);
+    contract.repay(&user_b, &token_a.address, &100);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+
+    let reclaimed_deposit = contract.reclaim(&user_c);
+    assert_eq!(reclaimed_deposit, 0);
+    assert_eq!(token_a.balance(&user_c), 0);
+    assert_eq!(token_b.balance(&user_c), 0);
 }
 
 #[test]
