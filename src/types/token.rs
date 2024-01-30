@@ -10,4 +10,5 @@ pub struct Token {
     pub returned_amount: i128,
     pub withdrawn_amount: i128,
     pub collateral_amount: i128,
+    pub withdrawn_collateral: i128,
 }

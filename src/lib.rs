@@ -21,8 +21,8 @@ use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symb
 use storage_types::DataKey;
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
-    add_token_swapped_amount, add_token_withdrawn_amount, get_token_a, get_token_a_address,
-    get_token_b, get_token_b_address, init_token_a, init_token_b,
+    add_token_swapped_amount, add_token_withdrawn_amount, add_token_withdrawn_collateral,
+    get_token_a, get_token_a_address, get_token_b, get_token_b_address, init_token_a, init_token_b,
 };
 use types::{
     asset::Asset, error::Error, position::Position, price_data::PriceData, state::State,
@@ -741,11 +741,11 @@ impl SwapTrait for Swap {
         if let Some(token) = get_deposited_token(&e, &to) {
             if token == get_token_a_address(&e) {
                 put_withdrawn_collateral(&e, &to, withdraw_amount);
-                add_token_collateral_amount(&e, &token, withdraw_amount);
+                add_token_withdrawn_collateral(&e, &token, withdraw_amount);
                 transfer_a(&e, &to, withdraw_amount);
             } else {
                 put_withdrawn_collateral(&e, &to, withdraw_amount);
-                add_token_collateral_amount(&e, &token, withdraw_amount);
+                add_token_withdrawn_collateral(&e, &token, withdraw_amount);
                 transfer_b(&e, &to, withdraw_amount);
             }
         }
