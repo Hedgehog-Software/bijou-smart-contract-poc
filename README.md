@@ -1,12 +1,17 @@
-# First build the contract
-```
-cargo build --target wasm32-unknown-unknown --release
-```
 # To test in developtment
-### Setup soroban identities
+## Set up soroban identities (Only once)
 ```
 soroban config identity add alice
 soroban config identity add bob
+```
+
+# Build the contract
+```
+soroban contract build
+```
+or
+```
+cargo build --target wasm32-unknown-unknown --release
 ```
 
 # To Deploy
@@ -28,9 +33,12 @@ soroban contract invoke --id $contract_id --network testnet -- initialize --toke
 
 soroban contract invoke --id $contract_id --network testnet -- initialize --token_a CAWH4XMRQL7AJZCXEJVRHHMT6Y7ZPFCQCSKLIFJL3AVIQNC5TSVWKQOR --token_b CCBINL4TCQVEQN2Q2GO66RS4CWUARIECZEJA7JVYQO3GVF4LG6HJN236 --forward_rate 100000
 ```
-## Soroban native token for testnet
+
+## Common tokens for testnet
 ```
-CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
+XLM  = CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
+USDC = GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+EURC = GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO
 ```
 
 # Deposit
