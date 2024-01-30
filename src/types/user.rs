@@ -8,7 +8,7 @@ pub struct User {
     pub swapped_amount: i128,
     pub returned_amount: i128,
     pub withdrawn_amount: i128,
-    pub refunded_amount: i128,
+    pub reclaimed_amount: i128,
     pub collateral: i128,
     pub is_liquidated: bool,
 }

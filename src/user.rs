@@ -80,7 +80,7 @@ pub fn get_user_balance(e: &Env, to: &Address) -> User {
         swapped_amount: get_swapped_amount(&e, &to),
         returned_amount: get_returned_amount(&e, &to),
         withdrawn_amount: get_withdrawn_amount(&e, &to),
-        refunded_amount: 0,
+        reclaimed_amount: get_reclaimed_amount(&e, &to),
         collateral: get_collateral(&e, &to),
         is_liquidated: is_liquidated(&e, &to),
     }

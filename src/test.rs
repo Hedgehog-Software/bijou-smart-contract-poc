@@ -760,7 +760,7 @@ fn test_balance() {
             deposited_amount: 100,
             swapped_amount: 100,
             returned_amount: 100,
-            refunded_amount: 0,
+            reclaimed_amount: 0,
             withdrawn_amount: 0,
             collateral: 10,
             is_liquidated: false,
