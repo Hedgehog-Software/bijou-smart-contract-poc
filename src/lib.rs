@@ -242,23 +242,6 @@ fn is_valid_token(e: &Env, token: Address) -> bool {
     token == token_a_address || token == token_b_address
 }
 
-// Deposit
-// fn handle_amount_deposit(e: &Env, to: &Address, token: &Address, amount: i128) {
-//     if !near_leg_executed && amount != 0 {
-//         let position_index = create_position(&e, &to, &token);
-
-//         token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
-//         put_deposited_amount(&e, &to, amount);
-//         add_token_deposited_amount(&e, &token, amount);
-//         ocupy_one_position(&e, &token, &position_data);
-
-//         set_position_valid(&e, position_index, &token);
-//     }
-// }
-
-// Amount that can swap
-//
-
 fn calculate_used_deposited_amount(
     user: &Address,
     used_positions: Vec<Position>,
