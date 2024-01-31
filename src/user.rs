@@ -127,6 +127,11 @@ pub fn put_reclaimed_amount(e: &Env, to: &Address, amount: i128) {
     get_and_add(e, key, amount);
 }
 
+pub fn put_is_liquidated(e: &Env, to: &Address, val: bool) {
+    let key = DataKey::ReturnedAmount(to.clone());
+    e.storage().persistent().set(&key, &val);
+}
+
 pub fn has_not_repaid(e: &Env, to: &Address) -> bool {
     let swapped_amount = get_swapped_amount(&e, &to);
     let returned_amount = get_returned_amount(&e, &to);
