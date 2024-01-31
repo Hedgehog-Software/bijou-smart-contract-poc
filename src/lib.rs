@@ -32,62 +32,54 @@ use user::{
     get_collateral, get_deposited_amount, get_deposited_token, get_reclaimed_amount,
     get_returned_amount, get_swapped_amount, get_user_balance, get_user_deposit,
     get_withdrawn_collateral, has_not_repaid, is_liquidated, put_collateral, put_deposited_amount,
-    put_deposited_token, put_reclaimed_amount, put_returned_amount, put_swapped_amount,
-    put_withdrawn_amount, put_withdrawn_collateral,
+    put_deposited_token, put_is_liquidated, put_reclaimed_amount, put_returned_amount,
+    put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral,
 };
 
 fn get_admin(e: &Env) -> Option<Address> {
-    e.storage().persistent().get(&DataKey::Admin)
+    e.storage().instance().get(&DataKey::Admin)
 }
 
 fn get_spot_rate(e: &Env) -> i128 {
     e.storage()
-        .persistent()
+        .instance()
         .get(&DataKey::SpotRate)
         .unwrap_or_default()
 }
 
 fn get_forward_rate(e: &Env) -> i128 {
-    e.storage().persistent().get(&DataKey::ForwardRate).unwrap()
+    e.storage().instance().get(&DataKey::ForwardRate).unwrap()
 }
 
 fn get_init_time(e: &Env) -> u64 {
-    e.storage().persistent().get(&DataKey::InitTime).unwrap()
+    e.storage().instance().get(&DataKey::InitTime).unwrap()
 }
 
 fn get_time_to_mature(e: &Env) -> u64 {
-    e.storage()
-        .persistent()
-        .get(&DataKey::TimeToMature)
-        .unwrap()
+    e.storage().instance().get(&DataKey::TimeToMature).unwrap()
 }
 
 fn put_admin(e: &Env, address: Address) {
-    e.storage().persistent().set(&DataKey::Admin, &address);
+    e.storage().instance().set(&DataKey::Admin, &address);
 }
 
 fn put_forward_rate(e: &Env, rate: i128) {
-    e.storage().persistent().set(&DataKey::ForwardRate, &rate);
+    e.storage().instance().set(&DataKey::ForwardRate, &rate);
 }
 
 fn put_spot_rate(e: &Env, amount: i128) {
-    e.storage().persistent().set(&DataKey::SpotRate, &amount);
+    e.storage().instance().set(&DataKey::SpotRate, &amount);
 }
 
 fn put_init_time(e: &Env) {
     let time = e.ledger().timestamp();
-    e.storage().persistent().set(&DataKey::InitTime, &time);
+    e.storage().instance().set(&DataKey::InitTime, &time);
 }
 
 fn put_time_to_mature(e: &Env, duration: u64) {
     e.storage()
-        .persistent()
+        .instance()
         .set(&DataKey::TimeToMature, &duration);
-}
-
-fn put_is_liquidated(e: &Env, to: &Address, val: bool) {
-    let key = DataKey::ReturnedAmount(to.clone());
-    e.storage().persistent().set(&key, &val);
 }
 
 fn transfer(e: &Env, token: Address, to: Address, amount: i128) {
@@ -605,7 +597,7 @@ impl SwapTrait for Swap {
             ocupy_one_position(&e, &token, &position_data);
         }
 
-        if collateral != 0 {
+        if collateral > 0 {
             token::Client::new(&e, &token).transfer(
                 &to,
                 &e.current_contract_address(),
