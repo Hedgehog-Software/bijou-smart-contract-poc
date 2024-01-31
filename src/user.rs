@@ -128,7 +128,7 @@ pub fn put_reclaimed_amount(e: &Env, to: &Address, amount: i128) {
 }
 
 pub fn put_is_liquidated(e: &Env, to: &Address, val: bool) {
-    let key = DataKey::ReturnedAmount(to.clone());
+    let key = DataKey::IsLiquidated(to.clone());
     e.storage().persistent().set(&key, &val);
 }
 
