@@ -1394,7 +1394,6 @@ fn test_state() {
         &forward_rate,
         &TIME_TO_MATURE,
     );
-    SwapTest::add_time(&e, TIME_TO_EXEC);
     let state = contract.state();
     assert_eq!(state, State::Deposit);
     SwapTest::add_time(&e, TIME_TO_EXEC);
