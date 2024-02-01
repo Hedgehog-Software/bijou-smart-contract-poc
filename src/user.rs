@@ -6,9 +6,8 @@ use crate::storage_types;
 use crate::types;
 
 fn get_and_add(e: &Env, key: DataKey, amount: i128) {
-    let mut count: i128 = e.storage().persistent().get(&key).unwrap_or_default();
-    count += amount;
-    e.storage().persistent().set(&key, &count);
+    let count: i128 = e.storage().persistent().get(&key).unwrap_or_default();
+    e.storage().persistent().set(&key, &(count + amount));
 }
 
 pub fn get_deposited_token(e: &Env, to: &Address) -> Option<Address> {
