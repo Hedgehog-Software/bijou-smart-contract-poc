@@ -803,6 +803,10 @@ impl SwapTrait for Swap {
             return Err(Error::TimeNotReached);
         }
 
+        if is_liquidated(&e, &to) {
+            return Err(Error::LiquidatedUser);
+        }
+
         if deposited_token == get_token_a_address(&e) {
             let used_deposited_amount = convert_amount_token_b_to_a(swapped_amount, forward_rate);
             let converted_returned_amount =
