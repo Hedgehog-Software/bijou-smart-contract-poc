@@ -44,7 +44,7 @@ pub fn get_swapped_amount(e: &Env, to: &Address) -> i128 {
         .unwrap_or_default()
 }
 
-fn get_withdrawn_amount(e: &Env, to: &Address) -> i128 {
+pub fn get_withdrawn_amount(e: &Env, to: &Address) -> i128 {
     e.storage()
         .persistent()
         .get(&DataKey::WithdrawnAmount(to.clone()))
