@@ -31,9 +31,9 @@ use types::{
 use user::{
     get_collateral, get_deposited_amount, get_deposited_token, get_reclaimed_amount,
     get_returned_amount, get_swapped_amount, get_user_balance, get_user_deposit,
-    get_withdrawn_collateral, has_not_repaid, is_liquidated, put_collateral, put_deposited_amount,
-    put_deposited_token, put_is_liquidated, put_reclaimed_amount, put_returned_amount,
-    put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral,
+    get_withdrawn_amount, get_withdrawn_collateral, has_not_repaid, is_liquidated, put_collateral,
+    put_deposited_amount, put_deposited_token, put_is_liquidated, put_reclaimed_amount,
+    put_returned_amount, put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral,
 };
 
 fn get_admin(e: &Env) -> Option<Address> {
@@ -793,11 +793,11 @@ impl SwapTrait for Swap {
 
     fn withdraw(e: Env, to: Address) -> Result<i128, Error> {
         let forward_rate = get_forward_rate(&e);
-        let spot_rate = get_spot_rate(&e);
         let returned_amount = get_returned_amount(&e, &to);
-        let swapped_amount = get_swapped_amount(&e, &to);
+        let withdrawn_amount = get_withdrawn_amount(&e, &to);
         let deposited_token = get_deposited_token(&e, &to).unwrap();
         let withdraw_amount: i128;
+        let token_a_data = get_token_a(&e);
 
         if !max_time_reached(&e) {
             return Err(Error::TimeNotReached);
@@ -807,21 +807,33 @@ impl SwapTrait for Swap {
             return Err(Error::LiquidatedUser);
         }
 
-        if deposited_token == get_token_a_address(&e) {
-            let used_deposited_amount = convert_amount_token_b_to_a(swapped_amount, forward_rate);
+        if deposited_token == token_a_data.address {
+            let token_a_available_amount =
+                token_a_data.returned_amount - token_a_data.withdrawn_amount;
+
             let converted_returned_amount =
                 convert_amount_token_b_to_a(returned_amount, forward_rate);
-            withdraw_amount = min(used_deposited_amount, converted_returned_amount);
+
+            withdraw_amount = min(
+                converted_returned_amount - withdrawn_amount,
+                token_a_available_amount,
+            );
 
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
             put_withdrawn_amount(&e, &to, withdraw_amount);
             transfer_a(&e, &to, withdraw_amount);
         } else {
             // User returned token_a
-            let used_deposited_amount = convert_amount_token_a_to_b(swapped_amount, spot_rate);
+            let token_b_data = get_token_b(&e);
+            let token_b_available_amount =
+                token_b_data.returned_amount - token_b_data.withdrawn_amount;
+
             let converted_returned_amount =
                 convert_amount_token_a_to_b(returned_amount, forward_rate);
-            withdraw_amount = min(used_deposited_amount, converted_returned_amount);
+            withdraw_amount = min(
+                converted_returned_amount - withdrawn_amount,
+                token_b_available_amount,
+            );
 
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
             put_withdrawn_amount(&e, &to, withdraw_amount);
