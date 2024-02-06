@@ -55,13 +55,13 @@ pub fn are_positions_open(position: &PositionData) -> bool {
 }
 
 pub fn ocupy_one_position(e: &Env, token: &Address, position: &PositionData) {
-    let new_position = PositionData {
+    let new_position_data = PositionData {
         limit: position.limit,
         used: position.used + 1,
         deposit_amount: position.deposit_amount,
     };
     match token.clone() == get_token_a_address(&e) {
-        true => set_position_a(&e, &new_position),
-        false => set_position_b(&e, &new_position),
+        true => set_position_a(&e, &new_position_data),
+        false => set_position_b(&e, &new_position_data),
     }
 }
