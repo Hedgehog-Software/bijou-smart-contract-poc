@@ -144,3 +144,54 @@ soroban contract invoke --id CBNPDIIALURDPGRYFYSNDF4P2X2FANRESNP7OUT67VZEQZ3A4I2
 ```
 soroban contract invoke --id CBNPDIIALURDPGRYFYSNDF4P2X2FANRESNP7OUT67VZEQZ3A4I26RB7I --network testnet -- balance --id alice
 ```
+
+---------
+# Costs of transactions
+The more information store in the instance storage, the more expensive will be each transaction, using persistent data will also make the transaction expensier, but only in those functions that require access persistent data.
+
+
+---------
+# Storage Types
+
+## Ledgers
+A ledger represents the state of the Stellar network at a point in time.
+Data is stored on the ledger as ledger entries.
+
+## TTL
+All contract data has a Time To Live (TTL), measured in ledgers, that must be periodically extended. If an entry's TTL is not periodically extended, the entry will eventually become "archived".
+The default lifetime of a new persistent entry is just 86400 ledgers (~5 days) and just 16 ledgers for a temp entry (~1.5m)
+100 ledgers are about 500 seconds.
+
+## Instance Data
+
+All instance storage is kept in a single contract instance called LedgerEntry, with a 64KB size. Anything stored in instance storage has an archival TTL that is tied to the contract instance itself. Therefore, if a contract is live and available, the instance storage is guaranteed to be so as well.
+
+## Persistent Data
+the instance storage works the same as persistent storage, except its own TTL is tied to that of the contract instance.
+
+Persistent data types are not retrieved every time the contract is called. Hence, the cost of reading the contract does not increase for unrelated functions.
+
+While having unlimited amount of storage, using the Persistent Data Type to store an array is still limited to 64KB of information.
+
+## Array of Deposits
+
+Using an array to store the deposits, given the limit of 64KB, and considering each position is 48 bytes, we can store a maximum amount of 1365 positions.
+Though, we need one array for each currency, implying that each amount will be at maximum 682 positions. 
+
+## Extend a deployed contract instance's TTL
+### From the CLI
+```
+soroban contract extend \
+    --source alice \
+    --network testnet \
+    --id $contract_id \
+    --ledgers-to-extend 535679 \
+    --durability persistent
+``` 
+This example uses 535,679 ledgers as the new archival TTL. This is the maximum allowable value for this argument on the CLI. This corresponds to roughly 30 days (averaging 5 second ledger close times).
+
+With this we can extend any `env.storage().instance()` entries in the contract
+
+### From the JS SDK [see](https://developers.stellar.org/docs/fundamentals-and-concepts/list-of-operations#extend-footprint-ttl)
+can be restored after archival using the RestoreFootprintOp operation.
+
