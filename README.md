@@ -58,9 +58,9 @@ soroban contract invoke --id $contract_id --network testnet -- init_pos --from a
 
 # Deposit
 ```
-soroban contract invoke --id $contract_id --network testnet -- deposit --to alice --token $token_a --amount 10000000 --collateral 2000000
+soroban contract invoke --id $contract_id --network testnet -- deposit --from alice --token $token_a --amount 10000000 --collateral 2000000
 
-soroban contract invoke --id $contract_id --source bob --network testnet -- deposit --to bob --token $token_b --amount 10000000 --collateral 2000000
+soroban contract invoke --id $contract_id --source bob --network testnet -- deposit --from bob --token $token_b --amount 10000000 --collateral 2000000
 ```
 
 # Execute near leg
@@ -75,42 +75,42 @@ soroban contract invoke --id $contract_id --source bob --network testnet -- spot
 
 # Swap Assets
 ```
-soroban contract invoke --id $contract_id --network testnet -- swap --to alice
+soroban contract invoke --id $contract_id --network testnet -- swap --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- swap --to bob
+soroban contract invoke --id $contract_id --network testnet -- swap --from bob
 ```
 
 # Repay Asset
 ```
-soroban contract invoke --id $contract_id --network testnet -- repay --to alice --token $token_b --amount 10000000
+soroban contract invoke --id $contract_id --network testnet -- repay --from alice --token $token_b --amount 10000000
 
-soroban contract invoke --id $contract_id --network testnet -- repay --to bob --token $token_a --amount 10000000
+soroban contract invoke --id $contract_id --network testnet -- repay --from bob --token $token_a --amount 10000000
 ```
 
 # Withdraw Original Asset
 ```
-soroban contract invoke --id $contract_id --network testnet -- withdraw --to alice
+soroban contract invoke --id $contract_id --network testnet -- withdraw --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- withdraw --to bob
+soroban contract invoke --id $contract_id --network testnet -- withdraw --from bob
 ```
 
 # Reclaim unused deposit
 ```
-soroban contract invoke --id $contract_id --network testnet -- reclaim --to alice
+soroban contract invoke --id $contract_id --network testnet -- reclaim --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- reclaim --to bob
+soroban contract invoke --id $contract_id --network testnet -- reclaim --from bob
 ```
 
 # Reclaim Collateral
 ```
-soroban contract invoke --id $contract_id --network testnet -- reclaim_col --to alice
+soroban contract invoke --id $contract_id --network testnet -- reclaim_col --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- reclaim_col --to bob
+soroban contract invoke --id $contract_id --network testnet -- reclaim_col --from bob
 ```
 
 # Liquidate User
 ```
-soroban contract invoke --id $contract_id --network testnet -- liquidate --to bob --from alice
+soroban contract invoke --id $contract_id --network testnet -- liquidate --from alice --to bob
 ```
 
 -----------------------

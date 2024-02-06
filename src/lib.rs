@@ -348,7 +348,7 @@ pub trait SwapTrait {
     //
     // # Arguments
     //
-    // * `to` - Address of user depositing
+    // * `from` - Address of user depositing
     // * `token` - Address of token to deposit
     // * `amount` - Amount to deposit
     // * `collateral` - Amount of collateral to deposit
@@ -358,7 +358,7 @@ pub trait SwapTrait {
     // Tuple total deposit amout and total collateral amount or Error
     fn deposit(
         e: Env,
-        to: Address,
+        from: Address,
         token: Address,
         amount: i128,
         collateral: i128,
@@ -376,12 +376,12 @@ pub trait SwapTrait {
     //
     // # Arguments
     //
-    // * `to` - Address of user executing swap
+    // * `from` - Address of user executing swap
     //
     // # Returns
     //
     // Swapped amount or Error if near leg was not executed
-    fn swap(e: Env, to: Address) -> Result<i128, Error>;
+    fn swap(e: Env, from: Address) -> Result<i128, Error>;
 
     // Liquidate the Address if can be liquidated
     // Only possible in the Execution and Completion State
@@ -403,47 +403,47 @@ pub trait SwapTrait {
     //
     // # Arguments
     //
-    // * `to` - Address of user repaying
+    // * `from` - Address of user repaying
     // * `token` - Address of token to repay
     // * `amount` - Amount to repay
     //
     // # Returns
     //
     // Tuple (total repaid amount, amount to repay) or Error
-    fn repay(e: Env, to: Address, token: Address, amount: i128) -> Result<(i128, i128), Error>;
+    fn repay(e: Env, from: Address, token: Address, amount: i128) -> Result<(i128, i128), Error>;
 
     // Withdraw the swapped amount (using forward rate)
     //
     // # Arguments
     //
-    // * `to` - Address of user withdrawing
+    // * `from` - Address of user withdrawing
     //
     // # Returns
     //
     // Withdrawn amount or Error
-    fn withdraw(e: Env, to: Address) -> Result<i128, Error>;
+    fn withdraw(e: Env, from: Address) -> Result<i128, Error>;
 
     // Transfers the initial deposit surplus
     //
     // # Arguments
     //
-    // * `to` - Address of user reclaiming
+    // * `from` - Address of user reclaiming
     //
     // # Returns
     //
     // Returned amount or Error if contract is open
-    fn reclaim(e: Env, to: Address) -> Result<i128, Error>;
+    fn reclaim(e: Env, from: Address) -> Result<i128, Error>;
 
     // Transers the deposit collateral
     //
     // # Arguments
     //
-    // * `to` - Address of user reclaiming
+    // * `from` - Address of user reclaiming
     //
     // # Returns
     //
     // Returned amount or Error if user was liquidated or contract is open
-    fn reclaim_col(e: Env, to: Address) -> Result<i128, Error>;
+    fn reclaim_col(e: Env, from: Address) -> Result<i128, Error>;
 
     // Returns a users balance
     //
@@ -481,13 +481,13 @@ pub trait SwapTrait {
     //
     // # Arguments
     //
-    // * `to` - Address of user
+    // * `from` - Address of user
     // * `rate` - rate of spot rate
     //
     // # Returns
     //
-    // None    // * `to` - Address of user
-    fn set_spot(e: Env, to: Address, rate: i128) -> Result<(), Error>;
+    // None
+    fn set_spot(e: Env, from: Address, rate: i128) -> Result<(), Error>;
 
     // Returns the current swap state
     //
@@ -551,12 +551,12 @@ impl SwapTrait for Swap {
 
     fn deposit(
         e: Env,
-        to: Address,
+        from: Address,
         token: Address,
         amount: i128,
         collateral: i128,
     ) -> Result<(i128, i128), Error> {
-        to.require_auth();
+        from.require_auth();
 
         if !is_valid_token(&e, token.clone()) {
             return Err(Error::InvalidToken);
@@ -577,20 +577,20 @@ impl SwapTrait for Swap {
             return Err(Error::CollateralOnlyCanBeDeposited);
         }
 
-        match get_deposited_token(&e, &to) {
+        match get_deposited_token(&e, &from) {
             Some(p) => {
                 if p != token {
                     return Err(Error::DifferentDepositedToken);
                 }
             }
-            None => put_deposited_token(&e, &to, &token),
+            None => put_deposited_token(&e, &from, &token),
         }
 
         if !near_leg_executed && amount != 0 {
-            let position_index = create_position(&e, &to, &token);
+            let position_index = create_position(&e, &from, &token);
 
-            token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &amount);
-            put_deposited_amount(&e, &to, amount);
+            token::Client::new(&e, &token).transfer(&from, &e.current_contract_address(), &amount);
+            put_deposited_amount(&e, &from, amount);
             add_token_deposited_amount(&e, &token, amount);
 
             set_position_valid(&e, position_index, &token);
@@ -599,19 +599,19 @@ impl SwapTrait for Swap {
 
         if collateral > 0 {
             token::Client::new(&e, &token).transfer(
-                &to,
+                &from,
                 &e.current_contract_address(),
                 &collateral,
             );
-            put_collateral(&e, &to, collateral);
+            put_collateral(&e, &from, collateral);
             add_token_collateral_amount(&e, &token, collateral);
         }
 
-        Ok(get_user_deposit(&e, &to))
+        Ok(get_user_deposit(&e, &from))
     }
 
-    fn swap(e: Env, to: Address) -> Result<i128, Error> {
-        to.require_auth();
+    fn swap(e: Env, from: Address) -> Result<i128, Error> {
+        from.require_auth();
 
         if get_spot_rate(&e) == 0 {
             return Err(Error::NearLegNotExecuted);
@@ -620,9 +620,9 @@ impl SwapTrait for Swap {
         let mut swap_amount: i128 = 0;
         let spot_rate = get_spot_rate(&e);
 
-        if let Some(token) = get_deposited_token(&e, &to) {
+        if let Some(token) = get_deposited_token(&e, &from) {
             if token == get_token_a_address(&e) {
-                let used_deposited_amount = get_used_deposited_amount(&e, &to);
+                let used_deposited_amount = get_used_deposited_amount(&e, &from);
                 let exp_swap_amount = convert_amount_token_a_to_b(used_deposited_amount, spot_rate);
 
                 let token_b_data = get_token_b(&e);
@@ -630,11 +630,11 @@ impl SwapTrait for Swap {
                     token_b_data.deposited_amount - token_b_data.swapped_amount;
 
                 swap_amount = min(exp_swap_amount, token_b_available_amount);
-                put_swapped_amount(&e, &to, swap_amount);
+                put_swapped_amount(&e, &from, swap_amount);
                 add_token_swapped_amount(&e, &token_b_data.address, swap_amount);
-                transfer_b(&e, &to, swap_amount);
+                transfer_b(&e, &from, swap_amount);
             } else {
-                let used_deposited_amount = get_used_deposited_amount(&e, &to);
+                let used_deposited_amount = get_used_deposited_amount(&e, &from);
                 let exp_swap_amount = convert_amount_token_b_to_a(used_deposited_amount, spot_rate);
 
                 let token_a_data = get_token_a(&e);
@@ -642,17 +642,17 @@ impl SwapTrait for Swap {
                     token_a_data.deposited_amount - token_a_data.swapped_amount;
 
                 swap_amount = min(exp_swap_amount, token_a_available_amount);
-                put_swapped_amount(&e, &to, swap_amount);
+                put_swapped_amount(&e, &from, swap_amount);
                 add_token_swapped_amount(&e, &token_a_data.address, swap_amount);
-                transfer_a(&e, &to, swap_amount);
+                transfer_a(&e, &from, swap_amount);
             }
         }
 
         Ok(swap_amount)
     }
 
-    fn reclaim(e: Env, to: Address) -> Result<i128, Error> {
-        to.require_auth();
+    fn reclaim(e: Env, from: Address) -> Result<i128, Error> {
+        from.require_auth();
 
         if !max_time_reached(&e) {
             return Err(Error::ContractStillOpen);
@@ -661,32 +661,32 @@ impl SwapTrait for Swap {
         let mut amount: i128 = 0;
 
         let spot_rate = get_spot_rate(&e);
-        if let Some(token) = get_deposited_token(&e, &to) {
+        if let Some(token) = get_deposited_token(&e, &from) {
             if token == get_token_a_address(&e) {
-                let user_deposited_amount = get_deposited_amount(&e, &to);
-                let user_swapped_amount = get_swapped_amount(&e, &to);
+                let user_deposited_amount = get_deposited_amount(&e, &from);
+                let user_swapped_amount = get_swapped_amount(&e, &from);
                 let amount_token_b_to_a =
                     convert_amount_token_b_to_a(user_swapped_amount, spot_rate);
-                let reclaimed_amount = get_reclaimed_amount(&e, &to);
+                let reclaimed_amount = get_reclaimed_amount(&e, &from);
                 amount = user_deposited_amount - amount_token_b_to_a - reclaimed_amount;
 
                 if amount > 0 {
                     add_token_withdrawn_amount(&e, &token, amount);
-                    put_reclaimed_amount(&e, &to, amount);
-                    transfer_a(&e, &to, amount);
+                    put_reclaimed_amount(&e, &from, amount);
+                    transfer_a(&e, &from, amount);
                 }
             } else {
-                let user_deposited_amount = get_deposited_amount(&e, &to);
-                let user_swapped_amount = get_swapped_amount(&e, &to);
+                let user_deposited_amount = get_deposited_amount(&e, &from);
+                let user_swapped_amount = get_swapped_amount(&e, &from);
                 let amount_token_a_to_b =
                     convert_amount_token_a_to_b(user_swapped_amount, spot_rate);
-                let reclaimed_amount = get_reclaimed_amount(&e, &to);
+                let reclaimed_amount = get_reclaimed_amount(&e, &from);
                 amount = user_deposited_amount - amount_token_a_to_b - reclaimed_amount;
 
                 if amount > 0 {
                     add_token_withdrawn_amount(&e, &token, amount);
-                    put_reclaimed_amount(&e, &to, amount);
-                    transfer_b(&e, &to, amount);
+                    put_reclaimed_amount(&e, &from, amount);
+                    transfer_b(&e, &from, amount);
                 }
             }
         }
@@ -694,10 +694,10 @@ impl SwapTrait for Swap {
         Ok(amount)
     }
 
-    fn reclaim_col(e: Env, to: Address) -> Result<i128, Error> {
-        to.require_auth();
+    fn reclaim_col(e: Env, from: Address) -> Result<i128, Error> {
+        from.require_auth();
 
-        if is_liquidated(&e, &to) {
+        if is_liquidated(&e, &from) {
             return Err(Error::LiquidatedUser);
         }
 
@@ -705,23 +705,23 @@ impl SwapTrait for Swap {
             return Err(Error::ContractStillOpen);
         }
 
-        let collateral_amount = get_collateral(&e, &to);
-        let withdrawn_collateral_amount = get_withdrawn_collateral(&e, &to);
+        let collateral_amount = get_collateral(&e, &from);
+        let withdrawn_collateral_amount = get_withdrawn_collateral(&e, &from);
         let withdraw_amount = collateral_amount - withdrawn_collateral_amount;
 
         if withdraw_amount <= 0 {
             return Ok(0);
         }
 
-        if let Some(token) = get_deposited_token(&e, &to) {
+        if let Some(token) = get_deposited_token(&e, &from) {
             if token == get_token_a_address(&e) {
-                put_withdrawn_collateral(&e, &to, withdraw_amount);
+                put_withdrawn_collateral(&e, &from, withdraw_amount);
                 add_token_withdrawn_collateral(&e, &token, withdraw_amount);
-                transfer_a(&e, &to, withdraw_amount);
+                transfer_a(&e, &from, withdraw_amount);
             } else {
-                put_withdrawn_collateral(&e, &to, withdraw_amount);
+                put_withdrawn_collateral(&e, &from, withdraw_amount);
                 add_token_withdrawn_collateral(&e, &token, withdraw_amount);
-                transfer_b(&e, &to, withdraw_amount);
+                transfer_b(&e, &from, withdraw_amount);
             }
         }
 
@@ -749,18 +749,18 @@ impl SwapTrait for Swap {
         Ok(liquidate_user(&e, &to, &from, spot_price))
     }
 
-    fn repay(e: Env, to: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
-        to.require_auth();
+    fn repay(e: Env, from: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
+        from.require_auth();
 
         if !is_valid_token(&e, token.clone()) {
             return Err(Error::InvalidToken);
         }
 
-        if is_liquidated(&e, &to) {
+        if is_liquidated(&e, &from) {
             return Err(Error::LiquidatedUser);
         }
 
-        let deposited_token = get_deposited_token(&e, &to).unwrap();
+        let deposited_token = get_deposited_token(&e, &from).unwrap();
         if deposited_token == get_token_a_address(&e) {
             if token != get_token_b_address(&e) {
                 return Err(Error::WrongRepayToken);
@@ -771,8 +771,8 @@ impl SwapTrait for Swap {
             }
         }
 
-        let prev_total_amount_to_repay = get_user_amount_to_repay(&e, &to);
-        let prev_total_returned_amount = get_returned_amount(&e, &to);
+        let prev_total_amount_to_repay = get_user_amount_to_repay(&e, &from);
+        let prev_total_returned_amount = get_returned_amount(&e, &from);
         let repay_amount = min(
             amount,
             prev_total_amount_to_repay - prev_total_returned_amount,
@@ -782,20 +782,24 @@ impl SwapTrait for Swap {
             return Err(Error::AlreadyRepaid);
         }
 
-        token::Client::new(&e, &token).transfer(&to, &e.current_contract_address(), &repay_amount);
-        put_returned_amount(&e, &to, repay_amount);
+        token::Client::new(&e, &token).transfer(
+            &from,
+            &e.current_contract_address(),
+            &repay_amount,
+        );
+        put_returned_amount(&e, &from, repay_amount);
         add_token_returned_amount(&e, &token, repay_amount);
 
-        let total_returned_amount = get_returned_amount(&e, &to);
-        let total_amount_to_repay = get_user_amount_to_repay(&e, &to);
+        let total_returned_amount = get_returned_amount(&e, &from);
+        let total_amount_to_repay = get_user_amount_to_repay(&e, &from);
         Ok((total_returned_amount, total_amount_to_repay))
     }
 
-    fn withdraw(e: Env, to: Address) -> Result<i128, Error> {
+    fn withdraw(e: Env, from: Address) -> Result<i128, Error> {
         let forward_rate = get_forward_rate(&e);
-        let returned_amount = get_returned_amount(&e, &to);
-        let withdrawn_amount = get_withdrawn_amount(&e, &to);
-        let deposited_token = get_deposited_token(&e, &to).unwrap();
+        let returned_amount = get_returned_amount(&e, &from);
+        let withdrawn_amount = get_withdrawn_amount(&e, &from);
+        let deposited_token = get_deposited_token(&e, &from).unwrap();
         let withdraw_amount: i128;
         let token_a_data = get_token_a(&e);
 
@@ -803,7 +807,7 @@ impl SwapTrait for Swap {
             return Err(Error::TimeNotReached);
         }
 
-        if is_liquidated(&e, &to) {
+        if is_liquidated(&e, &from) {
             return Err(Error::LiquidatedUser);
         }
 
@@ -820,8 +824,8 @@ impl SwapTrait for Swap {
             );
 
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
-            put_withdrawn_amount(&e, &to, withdraw_amount);
-            transfer_a(&e, &to, withdraw_amount);
+            put_withdrawn_amount(&e, &from, withdraw_amount);
+            transfer_a(&e, &from, withdraw_amount);
         } else {
             // User returned token_a
             let token_b_data = get_token_b(&e);
@@ -836,8 +840,8 @@ impl SwapTrait for Swap {
             );
 
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
-            put_withdrawn_amount(&e, &to, withdraw_amount);
-            transfer_b(&e, &to, withdraw_amount);
+            put_withdrawn_amount(&e, &from, withdraw_amount);
+            transfer_b(&e, &from, withdraw_amount);
         }
 
         Ok(withdraw_amount)
@@ -871,10 +875,10 @@ impl SwapTrait for Swap {
         (token_a, token_b)
     }
 
-    fn set_spot(e: Env, to: Address, amount: i128) -> Result<(), Error> {
-        to.require_auth();
+    fn set_spot(e: Env, from: Address, amount: i128) -> Result<(), Error> {
+        from.require_auth();
 
-        if !is_authorized(&e, &to) {
+        if !is_authorized(&e, &from) {
             return Err(Error::Unauthorized);
         }
 
