@@ -297,20 +297,20 @@ pub fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
 }
 
 pub trait SwapTrait {
-    // Sets the token contract addresses for this pooli128
+    // Initializes the contract.
     //
     // # Arguments
     //
-    // * `admin` - Address of admin
-    // * `token_a` - Address of token A to swap
-    // * `token_b` - Address of token B to swap
+    // * `admin` - Address of the admin,
+    // * `token_a` - Address of token A to swap,
+    // * `token_b` - Address of token B to swap,
     // * `name_token_a` - Symbol of token A to swap,
     // * `name_token_b` - Symbol of token B to swap,
-    // * `forward_rate` - forward rate
-    // * `duration` - Contract duration until the contract matures
+    // * `forward_rate` - Forward rate,
+    // * `duration` - Contract duration until the contract matures.
     // # Returns
     //
-    // None or Error
+    // None or Error.
     fn initialize(
         e: Env,
         admin: Address,
@@ -322,18 +322,18 @@ pub trait SwapTrait {
         duration: u64,
     ) -> Result<(), Error>;
 
-    // Set the positions values
+    // Set the positions' values.
     //
     // # Arguments
     //
-    // * `from` - Address of caller (Only admin can initialize the positions),
-    // * `positions_token_a` - Quantity of positions of token A,
-    // * `positions_token_b` - Quantity of positions of token B,
-    // * `amount_deposit_token_a` - Amount to deposit in each position of token A,
-    // * `amount_deposit_token_b` - Amount to deposit in each position of token B,
+    // * `from` - Address of the caller (Only admin can initialize the positions),
+    // * `positions_token_a` - Quantity of positions for Token A,
+    // * `positions_token_b` - Quantity of positions for Token B,
+    // * `amount_deposit_token_a` - Amount to deposit in each position for Token A,
+    // * `amount_deposit_token_b` - Amount to deposit in each position for Token B,
     // # Returns
     //
-    // None or Error
+    // None or Error.
     fn init_pos(
         e: Env,
         from: Address,
@@ -343,19 +343,19 @@ pub trait SwapTrait {
         amount_deposit_token_b: i128,
     ) -> Result<(), Error>;
 
-    // Deposits to: User, token: Address of token to deposit amount
+    // Deposit amount and collateral.
     // TODO: Add desired execution time
     //
     // # Arguments
     //
-    // * `from` - Address of user depositing
-    // * `token` - Address of token to deposit
-    // * `amount` - Amount to deposit
+    // * `from` - Address of the user depositing,
+    // * `token` - Address of the token to deposit,
+    // * `amount` - Amount to deposit,
     // * `collateral` - Amount of collateral to deposit
     //
     // # Returns
     //
-    // Tuple total deposit amout and total collateral amount or Error
+    // Tuple: total deposit amount and total collateral amount or Error.
     fn deposit(
         e: Env,
         from: Address,
@@ -364,143 +364,143 @@ pub trait SwapTrait {
         collateral: i128,
     ) -> Result<(i128, i128), Error>;
 
-    // Executes neag leg
+    // Executes neag leg.
     //
     // # Returns
     //
-    // Price and its timestamp of spot rate or None if the asset is not supported
+    // Price and timestamp of spot rate or None if the asset is not supported.
     fn near_leg(e: Env) -> Result<PriceData, Error>;
 
     // Transfers the desired token
-    // Can only be called in the Execution State
+    // Can only be called in the Execution State.
     //
     // # Arguments
     //
-    // * `from` - Address of user executing swap
+    // * `from` - Address of the user executing the swap
     //
     // # Returns
     //
-    // Swapped amount or Error if near leg was not executed
+    // Swapped amount or Error if near leg was not executed.
     fn swap(e: Env, from: Address) -> Result<i128, Error>;
 
     // Liquidate the Address if can be liquidated
-    // Only possible in the Execution and Completion State
-    // Returns %1 of collateral if liquidated, 0 otherwise
+    // Only possible after neaN Leg is executed
+    // Returns %1 of collateral if liquidated, 0 otherwise.
     //
     // # Arguments
     //
-    // * `to` - Address of user to liquidate
-    // * `from` - Address of user executing liquidation
+    // * `to` - Address of the user to liquidate,
+    // * `from` - Address of the user executing the liquidation
     //
     // # Returns
     //
-    // Reward amount if address liquidated, 0 if it was not or collateral was too low
+    // Reward amount if address liquidated, 0 if it was not or collateral was too low.
     fn liquidate(e: Env, to: Address, from: Address) -> i128;
 
     fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> Result<i128, Error>;
 
-    // To repay the amount previously swapped
+    // Repays the amount previously swapped.
     //
     // # Arguments
     //
-    // * `from` - Address of user repaying
-    // * `token` - Address of token to repay
+    // * `from` - Address of the user repaying,
+    // * `token` - Address of the token to repay,
     // * `amount` - Amount to repay
     //
     // # Returns
     //
-    // Tuple (total repaid amount, amount to repay) or Error
+    // Tuple: (total repaid amount, amount to repay) or Error.
     fn repay(e: Env, from: Address, token: Address, amount: i128) -> Result<(i128, i128), Error>;
 
-    // Withdraw the swapped amount (using forward rate)
+    // Withdraws the deposited amount using the forward rate.
     //
     // # Arguments
     //
-    // * `from` - Address of user withdrawing
+    // * `from` - Address of the user withdrawing
     //
     // # Returns
     //
-    // Withdrawn amount or Error
+    // Withdrawn amount or Error.
     fn withdraw(e: Env, from: Address) -> Result<i128, Error>;
 
-    // Transfers the initial deposit surplus
+    // Transfers the initial deposit surplus.
     //
     // # Arguments
     //
-    // * `from` - Address of user reclaiming
+    // * `from` - Address of the user reclaiming
     //
     // # Returns
     //
-    // Returned amount or Error if contract is open
+    // Reclaimed amount or an Error if the contract is open.
     fn reclaim(e: Env, from: Address) -> Result<i128, Error>;
 
-    // Transers the deposit collateral
+    // Transfers the deposited collateral.
     //
     // # Arguments
     //
-    // * `from` - Address of user reclaiming
+    // * `from` - Address of the user reclaiming
     //
     // # Returns
     //
-    // Returned amount or Error if user was liquidated or contract is open
+    // Reclaimed amount or Error if user was liquidated or contract is open.
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error>;
 
-    // Returns a users balance
+    // Returns a user's balance.
     //
     // # Arguments
     //
-    // * `to` - Address of user balance
+    // * `to` - Address of the user's balance
     //
     // # Returns
     //
-    // User balance
+    // User balance.
     fn balance(e: Env, to: Address) -> User;
 
-    // Returns the spot rate
+    // Returns the spot rate.
     //
     // # Returns
     //
-    // Spot rate value
+    // Spot rate value.
     fn spot_rate(e: Env) -> i128;
 
-    // Returns the Admin address
+    // Returns the Admin address.
     //
     // # Returns
     //
-    // Admin address or Panic if None
+    // Admin address or Panic if None.
     fn admin(e: Env) -> Address;
 
     // Returns the two tokens and its balances
     //
     // # Returns
     //
-    // Tuple of Token Data
+    // Tuple of Token Data.
     fn tokens(e: Env) -> (Token, Token);
 
     // Set the spot rate (Only for admin)
     //
     // # Arguments
     //
-    // * `from` - Address of user
+    // * `from` - Address of the user,
     // * `rate` - rate of spot rate
     //
     // # Returns
     //
-    // None
+    // None.
     fn set_spot(e: Env, from: Address, rate: i128) -> Result<(), Error>;
 
-    // Returns the current swap state
+    // Returns the current state.
     //
     // # Returns
     //
-    // Contract State
+    // Contract State.
     fn state(e: Env) -> State;
 
-    // Returns the deposits done for token
+    // Returns the deposits made in each token.
     //
     // # Returns
     //
-    // A tuple containing arrays of deposits, (deposits token A, deposits token B)
+    // Tuple containing arrays of deposits: (deposits for Token A, deposits for Token B).
     fn deposits(e: Env) -> (Vec<Position>, Vec<Position>);
 }
 
