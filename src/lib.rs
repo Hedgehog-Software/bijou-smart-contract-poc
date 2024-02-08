@@ -179,11 +179,6 @@ fn get_state(e: &Env) -> State {
 
 // Oracle
 fn get_oracle_spot_price(e: &Env) -> PriceData {
-    // return PriceData {
-    //     price: 100_000_000_000_000,
-    //     timestamp: 2,
-    // };
-
     let oracle_address: String = String::from_str(&e, ORACLE_ADDRESS);
     let target: Address = Address::from_string(&oracle_address);
     let func: Symbol = Symbol::new(&e, "x_last_price");
@@ -851,7 +846,6 @@ impl SwapTrait for Swap {
         get_spot_rate(&e)
     }
 
-    // See admin
     fn admin(e: Env) -> Address {
         get_admin(&e).unwrap()
     }

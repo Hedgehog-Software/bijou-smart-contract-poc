@@ -1,11 +1,5 @@
 use soroban_sdk::{contracttype, Address};
 
-// pub enum State {
-//     Initiation = 1,
-//     Execution = 2,
-//     Completion = 3,
-// }
-
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
