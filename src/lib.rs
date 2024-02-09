@@ -557,7 +557,7 @@ impl SwapTrait for Swap {
         }
 
         let mut swap_amount: i128 = 0;
-        let spot_rate = get_spot_rate(&e);
+        let spot_rate: i128 = get_spot_rate(&e);
 
         if let Some(token) = get_deposited_token(&e, &from) {
             if token == get_token_a_address(&e) {
@@ -681,11 +681,10 @@ impl SwapTrait for Swap {
     fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> Result<i128, Error> {
         from.require_auth();
 
-        if !is_authorized(&e, &from) {
-            return Err(Error::Unauthorized);
+        match is_authorized(&e, &from) {
+            true => Ok(liquidate_user(&e, &to, &from, spot_price)),
+            false => Err(Error::Unauthorized),
         }
-
-        Ok(liquidate_user(&e, &to, &from, spot_price))
     }
 
     fn repay(e: Env, from: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
@@ -700,12 +699,14 @@ impl SwapTrait for Swap {
         }
 
         let deposited_token = get_deposited_token(&e, &from).unwrap();
-        if deposited_token == get_token_a_address(&e) {
-            if token != get_token_b_address(&e) {
+        let token_a_address = get_token_a_address(&e);
+        let token_b_address = get_token_b_address(&e);
+        if deposited_token == token_a_address {
+            if token != token_b_address {
                 return Err(Error::WrongRepayToken);
             }
         } else {
-            if token != get_token_a_address(&e) {
+            if token != token_a_address {
                 return Err(Error::WrongRepayToken);
             }
         }
@@ -799,8 +800,7 @@ impl SwapTrait for Swap {
             return Err(Error::ExecutionTimeNotReached);
         }
 
-        let spot_rate: i128 = get_spot_rate(&e);
-        if spot_rate != 0 {
+        if get_spot_rate(&e) != 0 {
             return Err(Error::SpotRateAlreadyDefined);
         }
 
@@ -820,8 +820,7 @@ impl SwapTrait for Swap {
             return Err(Error::Unauthorized);
         }
 
-        put_spot_rate(&e, amount);
-        Ok(())
+        Ok(put_spot_rate(&e, amount))
     }
 
     fn state(e: Env) -> State {
