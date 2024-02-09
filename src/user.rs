@@ -1,8 +1,6 @@
 use soroban_sdk::{Address, Env};
-use storage_types::DataKey;
-use types::user::User;
+use types::{storage::DataKey, user::User};
 
-use crate::storage_types;
 use crate::types;
 
 fn get_and_add(e: &Env, key: DataKey, amount: i128) {

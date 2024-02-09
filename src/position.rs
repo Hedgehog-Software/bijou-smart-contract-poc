@@ -1,10 +1,8 @@
 use soroban_sdk::{Address, Env, Vec};
-use storage_types::DataKey;
 use types::position::Position;
 
-use crate::storage_types;
 use crate::token_data::get_token_a_address;
-use crate::types::{self};
+use crate::types::{self, storage::DataKey};
 
 pub fn get_used_positions_a(e: &Env) -> Vec<Position> {
     e.storage()

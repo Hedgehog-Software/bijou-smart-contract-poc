@@ -1,9 +1,8 @@
 use soroban_sdk::{Address, Env};
 
-use crate::storage_types::DataKey;
 use crate::token_data::get_token_a_address;
 use crate::types;
-use types::position_data::PositionData;
+use types::{position_data::PositionData, storage::DataKey};
 
 pub fn init_position_a(e: &Env, limit: u64, amount: i128) {
     e.storage().instance().set(

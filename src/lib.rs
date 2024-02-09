@@ -3,7 +3,6 @@
 mod constants;
 mod position;
 mod position_data;
-mod storage_types;
 mod test;
 mod token_data;
 mod types;
@@ -18,7 +17,6 @@ use position_data::{
     init_position_b, ocupy_one_position,
 };
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol, Vec};
-use storage_types::DataKey;
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
     add_token_swapped_amount, add_token_withdrawn_amount, add_token_withdrawn_collateral,
@@ -26,7 +24,7 @@ use token_data::{
 };
 use types::{
     asset::Asset, error::Error, position::Position, price_data::PriceData, state::State,
-    token::Token, user::User,
+    token::Token, user::User, storage::DataKey
 };
 use user::{
     get_collateral, get_deposited_amount, get_deposited_token, get_reclaimed_amount,
