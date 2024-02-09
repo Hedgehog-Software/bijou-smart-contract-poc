@@ -4,14 +4,14 @@ use types::position::Position;
 use crate::token_data::get_token_a_address;
 use crate::types::{self, storage::DataKey};
 
-pub fn get_used_positions_a(e: &Env) -> Vec<Position> {
+pub(crate) fn get_used_positions_a(e: &Env) -> Vec<Position> {
     e.storage()
         .persistent()
         .get(&DataKey::UsedPositionsA)
         .unwrap_or(Vec::new(&e))
 }
 
-pub fn get_used_positions_b(e: &Env) -> Vec<Position> {
+pub(crate) fn get_used_positions_b(e: &Env) -> Vec<Position> {
     e.storage()
         .persistent()
         .get(&DataKey::UsedPositionsB)
@@ -36,7 +36,7 @@ fn put_used_positions(e: &Env, token: &Address, used_positions: &Vec<Position>) 
     e.storage().persistent().set(&key, used_positions);
 }
 
-pub fn create_position(e: &Env, to: &Address, token: &Address) -> u32 {
+pub(crate) fn create_position(e: &Env, to: &Address, token: &Address) -> u32 {
     let position = Position {
         address: to.clone(),
         is_valid: false,
@@ -47,7 +47,7 @@ pub fn create_position(e: &Env, to: &Address, token: &Address) -> u32 {
     used_position.len() - 1
 }
 
-pub fn set_position_valid(e: &Env, position_index: u32, token: &Address) {
+pub(crate) fn set_position_valid(e: &Env, position_index: u32, token: &Address) {
     let mut used_position = get_used_positions(&e, &token);
     let mut position = used_position.get(position_index).unwrap();
     position.is_valid = true;

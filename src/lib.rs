@@ -198,7 +198,7 @@ fn calculate_used_deposited_amount(
     used_amount
 }
 
-pub fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
+fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
     let token_a_data = get_token_a(&e);
     let token_b_data = get_token_b(&e);
     let position_a = get_position_a(&e);
