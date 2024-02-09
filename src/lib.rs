@@ -1,8 +1,10 @@
 #![no_std]
 
 mod constants;
+mod oracle;
 mod position;
 mod position_data;
+mod storage;
 mod test;
 mod token_data;
 mod types;
@@ -10,21 +12,25 @@ mod user;
 
 use core::cmp::min;
 
-use constants::{COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use constants::{COLLATERAL_BUFFER, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use oracle::get_oracle_spot_price;
 use position::{create_position, get_used_positions_a, get_used_positions_b, set_position_valid};
 use position_data::{
     are_positions_open, get_position_a, get_position_b, get_position_data, init_position_a,
     init_position_b, ocupy_one_position,
 };
-use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
+use storage::{
+    get_admin, get_forward_rate, get_init_time, get_spot_rate, get_time_to_mature, put_admin,
+    put_forward_rate, put_init_time, put_spot_rate, put_time_to_mature,
+};
 use token_data::{
     add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
     add_token_swapped_amount, add_token_withdrawn_amount, add_token_withdrawn_collateral,
     get_token_a, get_token_a_address, get_token_b, get_token_b_address, init_token_a, init_token_b,
 };
 use types::{
-    asset::Asset, error::Error, position::Position, price_data::PriceData, state::State,
-    token::Token, user::User, storage::DataKey
+    error::Error, position::Position, price_data::PriceData, state::State, token::Token, user::User,
 };
 use user::{
     get_collateral, get_deposited_amount, get_deposited_token, get_reclaimed_amount,
@@ -33,52 +39,6 @@ use user::{
     put_deposited_amount, put_deposited_token, put_is_liquidated, put_reclaimed_amount,
     put_returned_amount, put_swapped_amount, put_withdrawn_amount, put_withdrawn_collateral,
 };
-
-fn get_admin(e: &Env) -> Option<Address> {
-    e.storage().instance().get(&DataKey::Admin)
-}
-
-fn get_spot_rate(e: &Env) -> i128 {
-    e.storage()
-        .instance()
-        .get(&DataKey::SpotRate)
-        .unwrap_or_default()
-}
-
-fn get_forward_rate(e: &Env) -> i128 {
-    e.storage().instance().get(&DataKey::ForwardRate).unwrap()
-}
-
-fn get_init_time(e: &Env) -> u64 {
-    e.storage().instance().get(&DataKey::InitTime).unwrap()
-}
-
-fn get_time_to_mature(e: &Env) -> u64 {
-    e.storage().instance().get(&DataKey::TimeToMature).unwrap()
-}
-
-fn put_admin(e: &Env, address: Address) {
-    e.storage().instance().set(&DataKey::Admin, &address);
-}
-
-fn put_forward_rate(e: &Env, rate: i128) {
-    e.storage().instance().set(&DataKey::ForwardRate, &rate);
-}
-
-fn put_spot_rate(e: &Env, amount: i128) {
-    e.storage().instance().set(&DataKey::SpotRate, &amount);
-}
-
-fn put_init_time(e: &Env) {
-    let time = e.ledger().timestamp();
-    e.storage().instance().set(&DataKey::InitTime, &time);
-}
-
-fn put_time_to_mature(e: &Env, duration: u64) {
-    e.storage()
-        .instance()
-        .set(&DataKey::TimeToMature, &duration);
-}
 
 fn transfer(e: &Env, token: Address, to: Address, amount: i128) {
     token::Client::new(e, &token).transfer(&e.current_contract_address(), &to, &amount);
@@ -175,21 +135,7 @@ fn get_state(e: &Env) -> State {
     }
 }
 
-// Oracle
-fn get_oracle_spot_price(e: &Env) -> PriceData {
-    let oracle_address: String = String::from_str(&e, ORACLE_ADDRESS);
-    let target: Address = Address::from_string(&oracle_address);
-    let func: Symbol = Symbol::new(&e, "x_last_price");
-    let base_token = get_token_a(&e).name;
-    let base_asset = Asset::Other(base_token);
-    let quote_token = get_token_b(&e).name;
-    let quote_asset = Asset::Other(quote_token);
-    let args = vec![&e, base_asset, quote_asset].to_vals();
-    e.invoke_contract::<PriceData>(&target, &func, args)
-}
-
 // User
-
 fn get_user_amount_to_repay(e: &Env, to: &Address) -> i128 {
     let forward_rate = get_forward_rate(&e);
     let spot_rate = get_spot_rate(&e);
