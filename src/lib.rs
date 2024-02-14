@@ -66,7 +66,7 @@ fn exec_near_leg(e: &Env) -> PriceData {
 }
 
 fn has_near_leg_executed(e: &Env) -> bool {
-    get_spot_rate(&e) != 0
+    get_state(&e) >= State::Swap
 }
 
 fn max_time_reached(e: &Env) -> bool {
@@ -245,6 +245,7 @@ pub trait SwapTrait {
     // * `token_b` - Address of token B to swap,
     // * `name_token_a` - Symbol of token A to swap,
     // * `name_token_b` - Symbol of token B to swap,
+    // * `spot_rate` - Spot rate,
     // * `forward_rate` - Forward rate,
     // * `duration` - Contract duration until the contract matures.
     // # Returns
@@ -257,6 +258,7 @@ pub trait SwapTrait {
         token_b: Address,
         name_token_a: Symbol,
         name_token_b: Symbol,
+        spot_rate: i128,
         forward_rate: i128,
         duration: u64,
     ) -> Result<(), Error>;
@@ -455,6 +457,7 @@ impl SwapTrait for Swap {
         token_b: Address,
         name_token_a: Symbol,
         name_token_b: Symbol,
+        spot_rate: i128,
         forward_rate: i128,
         duration: u64,
     ) -> Result<(), Error> {
@@ -464,6 +467,7 @@ impl SwapTrait for Swap {
                 put_admin(&e, admin);
                 init_token_a(&e, &token_a, name_token_a);
                 init_token_b(&e, &token_b, name_token_b);
+                put_spot_rate(&e, spot_rate);
                 put_forward_rate(&e, forward_rate);
                 put_init_time(&e);
                 put_time_to_mature(&e, duration);
@@ -508,7 +512,7 @@ impl SwapTrait for Swap {
             return Err(Error::AllPositionsAreUsed);
         }
 
-        if !near_leg_executed && amount != position_data.deposit_amount {
+        if !near_leg_executed && amount != 0 && amount != position_data.deposit_amount {
             return Err(Error::DepositAmountDoesntMatchPosition);
         }
 
@@ -552,8 +556,8 @@ impl SwapTrait for Swap {
     fn swap(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        if get_spot_rate(&e) == 0 {
-            return Err(Error::NearLegNotExecuted);
+        if get_state(&e) != State::Swap {
+            return Err(Error::WrongStateToSwap);
         }
 
         let mut swap_amount: i128 = 0;
