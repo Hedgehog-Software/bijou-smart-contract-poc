@@ -11,7 +11,7 @@ pub enum Error {
     LiquidatedUser = 5,
     TimeNotReached = 6,
     CollateralOnlyCanBeDeposited = 7,
-    NearLegNotExecuted = 8,
+    WrongStateToSwap = 8,
     InvalidToken = 9,
     ContractStillOpen = 10,
     AlreadyRepaid = 11,
