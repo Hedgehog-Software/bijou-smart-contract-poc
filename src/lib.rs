@@ -59,7 +59,7 @@ fn near_leg_time_reached(e: &Env) -> bool {
     ledger_timestamp >= exec_time
 }
 
-fn exec_near_leg(e: &Env) -> PriceData {
+fn set_spot_price(e: &Env) -> PriceData {
     let price_data = get_oracle_spot_price(&e);
     put_spot_rate(&e, price_data.price);
     price_data
@@ -144,10 +144,10 @@ fn get_user_amount_to_repay(e: &Env, to: &Address) -> i128 {
     if let Some(token) = get_deposited_token(&e, &to) {
         let token_a_address = get_token_a_address(&e);
         if token == token_a_address {
-            repay_amount = swapped_amount;
+            let used_deposited_amount = convert_amount_token_b_to_a(swapped_amount, spot_rate);
+            repay_amount = convert_amount_token_a_to_b(used_deposited_amount, forward_rate);
         } else {
-            let used_deposited_amount = convert_amount_token_a_to_b(swapped_amount, spot_rate);
-            repay_amount = convert_amount_token_b_to_a(used_deposited_amount, forward_rate);
+            repay_amount = swapped_amount;
         }
     }
     repay_amount
@@ -235,6 +235,18 @@ fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
     }
 }
 
+fn calculate_amount_deposit_token_b(
+    e: &Env,
+    positions_token_a: u64,
+    positions_token_b: u64,
+    amount_deposit_token_a: i128,
+) -> i128 {
+    let spot_rate = get_spot_rate(&e);
+    let total_amount_a: i128 = (positions_token_a as i128) * amount_deposit_token_a;
+    let amount_deposit_amount_a: i128 = total_amount_a / (positions_token_b as i128);
+    convert_amount_token_a_to_b(amount_deposit_amount_a, spot_rate)
+}
+
 pub trait SwapTrait {
     // Initializes the contract.
     //
@@ -245,12 +257,11 @@ pub trait SwapTrait {
     // * `token_b` - Address of token B to swap,
     // * `name_token_a` - Symbol of token A to swap,
     // * `name_token_b` - Symbol of token B to swap,
-    // * `spot_rate` - Spot rate,
     // * `forward_rate` - Forward rate,
     // * `duration` - Contract duration until the contract matures.
     // # Returns
     //
-    // None or Error.
+    // Spot rate or Error.
     fn initialize(
         e: Env,
         admin: Address,
@@ -258,10 +269,9 @@ pub trait SwapTrait {
         token_b: Address,
         name_token_a: Symbol,
         name_token_b: Symbol,
-        spot_rate: i128,
         forward_rate: i128,
         duration: u64,
-    ) -> Result<(), Error>;
+    ) -> Result<i128, Error>;
 
     // Set the positions' values.
     //
@@ -271,18 +281,16 @@ pub trait SwapTrait {
     // * `positions_token_a` - Quantity of positions for Token A,
     // * `positions_token_b` - Quantity of positions for Token B,
     // * `amount_deposit_token_a` - Amount to deposit in each position for Token A,
-    // * `amount_deposit_token_b` - Amount to deposit in each position for Token B,
     // # Returns
     //
-    // None or Error.
+    // Amount to deposit in each position of Token B or Error.
     fn init_pos(
         e: Env,
         from: Address,
         positions_token_a: u64,
         positions_token_b: u64,
         amount_deposit_token_a: i128,
-        amount_deposit_token_b: i128,
-    ) -> Result<(), Error>;
+    ) -> Result<i128, Error>;
 
     // Deposit amount and collateral.
     // TODO: Add desired execution time
@@ -457,21 +465,19 @@ impl SwapTrait for Swap {
         token_b: Address,
         name_token_a: Symbol,
         name_token_b: Symbol,
-        spot_rate: i128,
         forward_rate: i128,
         duration: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<i128, Error> {
         match get_admin(&e) {
             Some(_) => Err(Error::ContractAlreadyInitialized),
             None => {
                 put_admin(&e, admin);
                 init_token_a(&e, &token_a, name_token_a);
                 init_token_b(&e, &token_b, name_token_b);
-                put_spot_rate(&e, spot_rate);
                 put_forward_rate(&e, forward_rate);
                 put_init_time(&e);
                 put_time_to_mature(&e, duration);
-                Ok(())
+                Ok(set_spot_price(&e).price)
             }
         }
     }
@@ -482,14 +488,21 @@ impl SwapTrait for Swap {
         positions_token_a: u64,
         positions_token_b: u64,
         amount_deposit_token_a: i128,
-        amount_deposit_token_b: i128,
-    ) -> Result<(), Error> {
+    ) -> Result<i128, Error> {
         if !is_authorized(&e, &from) {
             return Err(Error::Unauthorized);
         }
+
         init_position_a(&e, positions_token_a, amount_deposit_token_a);
+        let amount_deposit_token_b = calculate_amount_deposit_token_b(
+            &e,
+            positions_token_a,
+            positions_token_b,
+            amount_deposit_token_a,
+        );
         init_position_b(&e, positions_token_b, amount_deposit_token_b);
-        Ok(())
+
+        Ok(amount_deposit_token_b)
     }
 
     fn deposit(
@@ -808,7 +821,7 @@ impl SwapTrait for Swap {
             return Err(Error::SpotRateAlreadyDefined);
         }
 
-        Ok(exec_near_leg(&e))
+        Ok(set_spot_price(&e))
     }
 
     fn tokens(e: Env) -> (Token, Token) {
