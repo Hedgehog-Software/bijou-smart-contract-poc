@@ -1,7 +1,9 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::constants::{ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_MATURE, TIME_TO_REPAY};
+use crate::constants::{
+    COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_MATURE, TIME_TO_REPAY,
+};
 use crate::types::state::State;
 use crate::types::user::User;
 use crate::types::user_liq_data::UserLiqData;
@@ -240,16 +242,16 @@ fn test_deposit() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    let (amount_a, collateral_a) = contract.deposit(&user_a, &token_a.address, &100, &10);
-    let (amount_b, collateral_b) = contract.deposit(&user_b, &token_b.address, &200, &20);
+    let (amount_a, collateral_a) = contract.deposit(&user_a, &token_a.address, &100, &20);
+    let (amount_b, collateral_b) = contract.deposit(&user_b, &token_b.address, &200, &40);
 
     assert_eq!(amount_a, 100);
     assert_eq!(amount_b, 200);
-    assert_eq!(collateral_a, 10);
-    assert_eq!(collateral_b, 20);
+    assert_eq!(collateral_a, 20);
+    assert_eq!(collateral_b, 40);
 
-    assert_eq!(token_a.balance(&user_a), 890);
-    assert_eq!(token_b.balance(&user_b), 780);
+    assert_eq!(token_a.balance(&user_a), 880);
+    assert_eq!(token_b.balance(&user_b), 760);
 }
 
 #[test]
@@ -274,7 +276,7 @@ fn test_deposit_wrong_amount() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &200, &15);
+    contract.deposit(&user_a, &token_a.address, &200, &200);
 }
 
 #[test]
@@ -302,8 +304,63 @@ fn test_deposit_all_positions_closed() {
     );
     token_admin_client_a.mint(&user_b, &1000);
     contract.init_pos(&token_admin, &1, &1, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &15);
-    contract.deposit(&user_b, &token_a.address, &100, &15);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_a.address, &100, &20);
+}
+
+#[test]
+#[should_panic]
+fn test_deposit_insuficient_collateral() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    token_admin_client_a.mint(&user_b, &1000);
+    contract.init_pos(&token_admin, &1, &1, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+}
+
+#[test]
+fn test_deposit_high_collateral() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    token_admin_client_a.mint(&user_b, &1000);
+    contract.init_pos(&token_admin, &1, &1, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &100);
 }
 
 #[test]
@@ -470,6 +527,7 @@ fn test_deposit_amount_after_near_leg() {
 fn test_deposit_collateral_after_near_leg() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
+        e,
         token_admin,
         user_a,
         token_a,
@@ -487,11 +545,12 @@ fn test_deposit_collateral_after_near_leg() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
     let (amount_a, collateral_a) = contract.deposit(&user_a, &token_a.address, &0, &50);
 
     assert_eq!(amount_a, 100);
-    assert_eq!(collateral_a, 60);
+    assert_eq!(collateral_a, 70);
 }
 
 #[test]
@@ -517,8 +576,8 @@ fn test_swap() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
@@ -562,9 +621,9 @@ fn test_swap_with_order() {
     token_admin_client_a.mint(&user_c, &1000);
 
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_c, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_c, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
@@ -610,9 +669,9 @@ fn test_swap_with_order_not_enough() {
     token_admin_client_a.mint(&user_c, &1000);
 
     contract.init_pos(&token_admin, &100, &100, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_c, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &100, &10);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_c, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &100, &20);
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
@@ -655,8 +714,8 @@ fn test_repay_a() {
     );
     contract.init_pos(&token_admin, &100, &50, &100);
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
 
@@ -690,8 +749,8 @@ fn test_repay_b() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
@@ -727,8 +786,8 @@ fn test_repay_error() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
 
@@ -761,8 +820,8 @@ fn test_repay_instances() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
 
@@ -797,8 +856,8 @@ fn test_balance() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.repay(&user_a, &token_b.address, &100);
@@ -812,7 +871,7 @@ fn test_balance() {
             returned_amount: 100,
             reclaimed_amount: 0,
             withdrawn_amount: 0,
-            collateral: 10,
+            collateral: 20,
             is_liquidated: false,
         }
     );
@@ -841,20 +900,20 @@ fn test_withdraw_a() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_a, &token_b.address, &100);
     contract.repay(&user_b, &token_a.address, &100);
-    assert_eq!(token_a.balance(&user_a), 890);
+    assert_eq!(token_a.balance(&user_a), 880);
     assert_eq!(token_b.balance(&user_a), 0);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     let withdrawn_amount = contract.withdraw(&user_a);
     assert_eq!(withdrawn_amount, 100);
-    assert_eq!(token_a.balance(&user_a), 990);
+    assert_eq!(token_a.balance(&user_a), 980);
 }
 
 #[test]
@@ -880,19 +939,19 @@ fn test_withdraw_b() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_a, &token_b.address, &100);
     contract.repay(&user_b, &token_a.address, &100);
-    assert_eq!(token_b.balance(&user_b), 780);
+    assert_eq!(token_b.balance(&user_b), 760);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     let withdrawn_amount = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount, 100);
-    assert_eq!(token_b.balance(&user_b), 880);
+    assert_eq!(token_b.balance(&user_b), 860);
 }
 
 #[test]
@@ -907,6 +966,7 @@ fn test_withdraw_liquidated() {
         token_a,
         token_b,
         contract,
+        oracle_client,
         ..
     } = SwapTest::setup();
     contract.initialize(
@@ -919,12 +979,13 @@ fn test_withdraw_liquidated() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
     contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
     SwapTest::add_time(&e, TIME_TO_MATURE);
+    oracle_client.set_spot_rate(&90_000_000_000_000);
     contract.liquidate(&user_a, &token_admin);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_a);
@@ -953,8 +1014,8 @@ fn test_reclaim() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     let swap_amount = contract.swap(&user_b);
     contract.swap(&user_a);
@@ -963,14 +1024,14 @@ fn test_reclaim() {
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_b, &token_a.address, &100);
     contract.repay(&user_a, &token_b.address, &100);
-    assert_eq!(token_b.balance(&user_b), 780);
+    assert_eq!(token_b.balance(&user_b), 760);
 
     SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_b);
-    assert_eq!(token_b.balance(&user_b), 880);
+    assert_eq!(token_b.balance(&user_b), 860);
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 100);
-    assert_eq!(token_b.balance(&user_b), 980);
+    assert_eq!(token_b.balance(&user_b), 960);
 }
 
 #[test]
@@ -998,12 +1059,12 @@ fn test_full_reclaim() {
     );
     let user_c = Address::generate(&e);
     assert_ne!(user_a, user_c);
-    token_admin_client_b.mint(&user_c, &110);
+    token_admin_client_b.mint(&user_c, &120);
 
     contract.init_pos(&token_admin, &10, &10, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &100, &10);
-    contract.deposit(&user_c, &token_b.address, &100, &10);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &100, &20);
+    contract.deposit(&user_c, &token_b.address, &100, &20);
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
@@ -1013,14 +1074,14 @@ fn test_full_reclaim() {
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_b, &token_a.address, &100);
     contract.repay(&user_a, &token_b.address, &100);
-    assert_eq!(token_b.balance(&user_b), 890);
+    assert_eq!(token_b.balance(&user_b), 880);
 
     SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_b);
-    assert_eq!(token_b.balance(&user_b), 990);
+    assert_eq!(token_b.balance(&user_b), 980);
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 0);
-    assert_eq!(token_b.balance(&user_b), 990);
+    assert_eq!(token_b.balance(&user_b), 980);
 
     contract.withdraw(&user_c);
     assert_eq!(token_b.balance(&user_c), 0);
@@ -1052,8 +1113,8 @@ fn test_multiple_reclaim() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     let swap_amount = contract.swap(&user_b);
     contract.swap(&user_a);
@@ -1062,18 +1123,22 @@ fn test_multiple_reclaim() {
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_b, &token_a.address, &100);
     contract.repay(&user_a, &token_b.address, &100);
-    assert_eq!(token_b.balance(&user_b), 780);
+    assert_eq!(token_b.balance(&user_b), 760);
 
     SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_b);
-    assert_eq!(token_b.balance(&user_b), 880);
+    assert_eq!(token_b.balance(&user_b), 860);
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 100);
-    assert_eq!(token_b.balance(&user_b), 980);
+    assert_eq!(token_b.balance(&user_b), 960);
 
     let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 0);
-    assert_eq!(token_b.balance(&user_b), 980);
+    assert_eq!(token_b.balance(&user_b), 960);
+
+    let reclaimed_collateral = contract.reclaim_col(&user_b);
+    assert_eq!(reclaimed_collateral, 40);
+    assert_eq!(token_b.balance(&user_b), 1000);
 }
 
 #[test]
@@ -1103,8 +1168,8 @@ fn test_reclaim_for_non_participant() {
     assert_eq!(token_b.balance(&user_c), 0);
 
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
@@ -1142,8 +1207,8 @@ fn test_reclaim_collateral() {
         &TIME_TO_MATURE,
     );
     contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
@@ -1152,10 +1217,10 @@ fn test_reclaim_collateral() {
     contract.repay(&user_b, &token_a.address, &100);
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.withdraw(&user_a);
-    assert_eq!(token_a.balance(&user_a), 990);
+    assert_eq!(token_a.balance(&user_a), 980);
 
     let reclaimed_collateral = contract.reclaim_col(&user_a);
-    assert_eq!(reclaimed_collateral, 10);
+    assert_eq!(reclaimed_collateral, 20);
     assert_eq!(token_a.balance(&user_a), 1000);
 }
 
@@ -1170,6 +1235,7 @@ fn test_liquidate_swap() {
         token_a,
         token_b,
         contract,
+        oracle_client,
         ..
     } = SwapTest::setup();
     contract.initialize(
@@ -1181,16 +1247,17 @@ fn test_liquidate_swap() {
         &forward_rate,
         &TIME_TO_MATURE,
     );
-    contract.init_pos(&token_admin, &100, &100, &900);
-    contract.deposit(&user_a, &token_a.address, &900, &100);
-    contract.deposit(&user_b, &token_b.address, &900, &100);
+    contract.init_pos(&token_admin, &100, &100, &800);
+    contract.deposit(&user_a, &token_a.address, &800, &200);
+    contract.deposit(&user_b, &token_b.address, &800, &200);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
-    assert_eq!(token_a.balance(&user_b), 900);
+    assert_eq!(token_a.balance(&user_b), 800);
+    oracle_client.set_spot_rate(&70_000_000_000_000);
     let reward_amount = contract.liquidate(&user_a, &token_admin);
-    assert_eq!(reward_amount, 1);
-    assert_eq!(token_a.balance(&token_admin), 1);
+    assert_eq!(reward_amount, 2);
+    assert_eq!(token_a.balance(&token_admin), 2);
 }
 
 #[test]
@@ -1217,13 +1284,13 @@ fn test_no_liquidate_swap() {
         &TIME_TO_MATURE,
     );
     token_admin_client_a.mint(&user_a, &100);
-    contract.init_pos(&token_admin, &100, &100, &900);
-    contract.deposit(&user_a, &token_a.address, &900, &200);
-    contract.deposit(&user_b, &token_b.address, &900, &100);
+    contract.init_pos(&token_admin, &100, &100, &800);
+    contract.deposit(&user_a, &token_a.address, &800, &200);
+    contract.deposit(&user_b, &token_b.address, &800, &200);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
-    assert_eq!(token_a.balance(&user_b), 900);
+    assert_eq!(token_a.balance(&user_b), 800);
     let reward_amount = contract.liquidate(&user_a, &token_admin);
     assert_eq!(reward_amount, 0);
     assert_eq!(token_a.balance(&token_admin), 0);
@@ -1240,6 +1307,7 @@ fn test_liquidate_repay() {
         token_a,
         token_b,
         contract,
+        oracle_client,
         ..
     } = SwapTest::setup();
     contract.initialize(
@@ -1251,19 +1319,20 @@ fn test_liquidate_repay() {
         &forward_rate,
         &TIME_TO_MATURE,
     );
-    contract.init_pos(&token_admin, &10, &10, &900);
-    contract.deposit(&user_a, &token_a.address, &900, &100);
-    contract.deposit(&user_b, &token_b.address, &900, &100);
+    contract.init_pos(&token_admin, &10, &10, &800);
+    contract.deposit(&user_a, &token_a.address, &800, &200);
+    contract.deposit(&user_b, &token_b.address, &800, &200);
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
     contract.swap(&user_b);
     SwapTest::add_time(&e, TIME_TO_MATURE);
-    contract.repay(&user_a, &token_b.address, &900);
+    contract.repay(&user_a, &token_b.address, &800);
     SwapTest::add_time(&e, TIME_TO_REPAY);
-    assert_eq!(token_a.balance(&user_b), 900);
+    assert_eq!(token_a.balance(&user_b), 800);
+    oracle_client.set_spot_rate(&120_000_000_000_000);
     let reward_amount = contract.liquidate(&user_b, &token_admin);
-    assert_eq!(reward_amount, 1);
-    assert_eq!(token_b.balance(&token_admin), 1);
+    assert_eq!(reward_amount, 2);
+    assert_eq!(token_b.balance(&token_admin), 2);
 }
 
 #[test]
@@ -1285,7 +1354,7 @@ fn test_forward_bigger_than_spot() {
     let forward_rate: i128 = 52_631_578_947_368;
     let decimals = 100_000_000;
 
-    token_admin_client_a.mint(&user_a, &(10_000 * decimals));
+    token_admin_client_a.mint(&user_a, &(12_000 * decimals));
     token_admin_client_b.mint(&user_b, &(10_000 * decimals));
     oracle_client.set_spot_rate(&spot_rate);
 
@@ -1299,10 +1368,21 @@ fn test_forward_bigger_than_spot() {
         &TIME_TO_MATURE,
     );
     let amount_to_deposit_b = contract.init_pos(&token_admin, &100, &100, &(10_000 * decimals));
+    let amount_col_b = amount_to_deposit_b * &COLLATERAL_BUFFER / 100;
     assert_eq!(amount_to_deposit_b, 523_560_209_424);
 
-    contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
-    contract.deposit(&user_b, &token_b.address, &523_560_209_424, &1_000);
+    contract.deposit(
+        &user_a,
+        &token_a.address,
+        &(10_000 * decimals),
+        &(2_000 * decimals),
+    );
+    contract.deposit(
+        &user_b,
+        &token_b.address,
+        &amount_to_deposit_b,
+        &amount_col_b,
+    );
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
@@ -1328,8 +1408,12 @@ fn test_forward_bigger_than_spot() {
     let withdrawn_amount_b = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount_a, 999_999_999_998);
     assert_eq!(withdrawn_amount_b, 526_315_789_473);
-    assert_eq!(token_a.balance(&user_a), 999_999_999_998);
-    assert_eq!(token_b.balance(&user_b), 1_002_755_580_049);
+    assert_eq!(token_a.balance(&user_a), 1_000_000_000_998);
+    assert_eq!(token_b.balance(&user_b), 898_043_539_165);
+
+    let reclaim_col_b = contract.reclaim_col(&user_b);
+    assert_eq!(reclaim_col_b, amount_col_b);
+    assert_eq!(token_b.balance(&user_b), 1_002_755_581_049);
 }
 
 #[test]
@@ -1351,7 +1435,7 @@ fn test_forward_smaller_than_spot() {
     let forward_rate: i128 = 52_356_020_942_408;
     let decimals = 100_000_000;
 
-    token_admin_client_a.mint(&user_a, &(10_000 * decimals));
+    token_admin_client_a.mint(&user_a, &(12_000 * decimals));
     token_admin_client_b.mint(&user_b, &(10_000 * decimals));
 
     oracle_client.set_spot_rate(&spot_rate);
@@ -1366,9 +1450,20 @@ fn test_forward_smaller_than_spot() {
     );
     let amount_deposit_b = contract.init_pos(&token_admin, &100, &100, &(10_000 * decimals));
     assert_eq!(amount_deposit_b, 526_315_789_473);
+    let token_b_collateral = 526_315_789_473 * COLLATERAL_BUFFER / 100;
 
-    contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
-    contract.deposit(&user_b, &token_b.address, &526_315_789_473, &1_000);
+    contract.deposit(
+        &user_a,
+        &token_a.address,
+        &(10_000 * decimals),
+        &(2_000 * decimals),
+    );
+    contract.deposit(
+        &user_b,
+        &token_b.address,
+        &526_315_789_473,
+        &token_b_collateral,
+    );
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
     let swapped_amount_a = contract.swap(&user_a);
@@ -1393,14 +1488,17 @@ fn test_forward_smaller_than_spot() {
     let withdrawn_amount_b = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount_a, 999_999_999_997);
     assert_eq!(withdrawn_amount_b, 523_560_209_423);
-    assert_eq!(token_a.balance(&user_a), 999_999_999_997);
-    assert_eq!(token_b.balance(&user_b), 997_244_419_950);
+    assert_eq!(token_a.balance(&user_a), 1_000_000_000_997);
+    assert_eq!(token_b.balance(&user_b), 891_981_263_056);
 
     let reclaim_amount_a = contract.reclaim(&user_a);
-    assert_eq!(reclaim_amount_a, 2);
+    assert_eq!(reclaim_amount_a, 0);
 
     let reclaim_amount_b = contract.reclaim(&user_b);
-    assert_eq!(reclaim_amount_b, 1);
+    assert_eq!(reclaim_amount_b, 0);
+
+    let reclaim_col_amount_b = contract.reclaim_col(&user_b);
+    assert_eq!(reclaim_col_amount_b, token_b_collateral);
 }
 
 #[test]
@@ -1486,7 +1584,7 @@ fn test_one_to_many_position() {
     let forward_rate: i128 = SCALE;
     let decimals = 100_000_000;
 
-    token_admin_client_a.mint(&user_a, &(10_000 * decimals));
+    token_admin_client_a.mint(&user_a, &(12_000 * decimals));
     token_admin_client_b.mint(&user_b, &(10_000 * decimals));
 
     contract.initialize(
@@ -1498,17 +1596,38 @@ fn test_one_to_many_position() {
         &forward_rate,
         &TIME_TO_MATURE,
     );
+    let token_b_collateral = 333_333_333_333 * COLLATERAL_BUFFER / 100;
     contract.init_pos(&token_admin, &1, &3, &(10_000 * decimals));
-    contract.deposit(&user_a, &token_a.address, &(10_000 * decimals), &1_000);
-    contract.deposit(&user_b, &token_b.address, &333_333_333_333, &1_000);
+    contract.deposit(
+        &user_a,
+        &token_a.address,
+        &(10_000 * decimals),
+        &(2_000 * decimals),
+    );
+    contract.deposit(
+        &user_b,
+        &token_b.address,
+        &333_333_333_333,
+        &token_b_collateral,
+    );
 
     let user_c = Address::generate(&e);
     let user_d = Address::generate(&e);
-    token_admin_client_b.mint(&user_c, &(333_333_333_333 + 1_000));
-    token_admin_client_b.mint(&user_d, &(333_333_333_333 + 1_000));
+    token_admin_client_b.mint(&user_c, &(333_333_333_333 + token_b_collateral));
+    token_admin_client_b.mint(&user_d, &(333_333_333_333 + token_b_collateral));
 
-    contract.deposit(&user_c, &token_b.address, &333_333_333_333, &1_000);
-    contract.deposit(&user_d, &token_b.address, &333_333_333_333, &1_000);
+    contract.deposit(
+        &user_c,
+        &token_b.address,
+        &333_333_333_333,
+        &token_b_collateral,
+    );
+    contract.deposit(
+        &user_d,
+        &token_b.address,
+        &333_333_333_333,
+        &token_b_collateral,
+    );
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
@@ -1617,11 +1736,11 @@ fn test_users() {
 
     contract.init_pos(&token_admin, &100, &50, &100);
 
-    contract.deposit(&user_a, &token_a.address, &100, &10);
-    contract.deposit(&user_c, &token_a.address, &100, &10);
-    contract.deposit(&user_d, &token_a.address, &100, &10);
-    contract.deposit(&user_b, &token_b.address, &200, &20);
-    contract.deposit(&user_e, &token_b.address, &200, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_c, &token_a.address, &100, &20);
+    contract.deposit(&user_d, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
+    contract.deposit(&user_e, &token_b.address, &200, &40);
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
     contract.swap(&user_a);
@@ -1638,19 +1757,19 @@ fn test_users() {
             [
                 UserLiqData {
                     address: user_a.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 20,
                     is_liquidated: false
                 }
@@ -1665,13 +1784,13 @@ fn test_users() {
             [
                 UserLiqData {
                     address: user_b.clone(),
-                    collateral: 20,
+                    collateral: 40,
                     min_collateral: 40,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
-                    collateral: 20,
+                    collateral: 40,
                     min_collateral: 20,
                     is_liquidated: false
                 }
@@ -1688,19 +1807,19 @@ fn test_users() {
             [
                 UserLiqData {
                     address: user_a.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 22,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 22,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 22,
                     is_liquidated: false
                 }
@@ -1715,13 +1834,13 @@ fn test_users() {
             [
                 UserLiqData {
                     address: user_b.clone(),
-                    collateral: 20,
+                    collateral: 40,
                     min_collateral: 36,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
-                    collateral: 20,
+                    collateral: 40,
                     min_collateral: 18,
                     is_liquidated: false
                 }
@@ -1738,19 +1857,19 @@ fn test_users() {
             [
                 UserLiqData {
                     address: user_a.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 10,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 10,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
-                    collateral: 10,
+                    collateral: 20,
                     min_collateral: 10,
                     is_liquidated: false
                 }
@@ -1765,13 +1884,13 @@ fn test_users() {
             [
                 UserLiqData {
                     address: user_b.clone(),
-                    collateral: 20,
+                    collateral: 40,
                     min_collateral: 80,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
-                    collateral: 20,
+                    collateral: 40,
                     min_collateral: 40,
                     is_liquidated: false
                 }
