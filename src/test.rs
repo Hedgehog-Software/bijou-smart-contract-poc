@@ -1583,6 +1583,203 @@ fn test_state() {
     assert_eq!(state, State::Withdraw);
 }
 
+#[test]
+fn test_users() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        token_admin_client_b,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    let user_c = Address::generate(&e);
+    let user_d = Address::generate(&e);
+    let user_e = Address::generate(&e);
+    token_admin_client_a.mint(&user_c, &1_000);
+    token_admin_client_a.mint(&user_d, &1_000);
+    token_admin_client_b.mint(&user_e, &1_000);
+
+    contract.init_pos(&token_admin, &100, &50, &100);
+
+    contract.deposit(&user_a, &token_a.address, &100, &10);
+    contract.deposit(&user_c, &token_a.address, &100, &10);
+    contract.deposit(&user_d, &token_a.address, &100, &10);
+    contract.deposit(&user_b, &token_b.address, &200, &20);
+    contract.deposit(&user_e, &token_b.address, &200, &20);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.swap(&user_a);
+    contract.swap(&user_c);
+    contract.swap(&user_d);
+    contract.swap(&user_b);
+    contract.swap(&user_e);
+
+    let (users_a, users_b) = contract.users();
+    assert_eq!(
+        users_a,
+        Vec::from_array(
+            &e,
+            [
+                UserLiqData {
+                    address: user_a.clone(),
+                    collateral: 10,
+                    min_collateral: 20,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_c.clone(),
+                    collateral: 10,
+                    min_collateral: 20,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_d.clone(),
+                    collateral: 10,
+                    min_collateral: 20,
+                    is_liquidated: false
+                }
+            ]
+        )
+    );
+
+    assert_eq!(
+        users_b,
+        Vec::from_array(
+            &e,
+            [
+                UserLiqData {
+                    address: user_b.clone(),
+                    collateral: 20,
+                    min_collateral: 40,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_e.clone(),
+                    collateral: 20,
+                    min_collateral: 20,
+                    is_liquidated: false
+                }
+            ]
+        )
+    );
+
+    oracle_client.set_spot_rate(&90_000_000_000_000);
+    let (users_a, users_b) = contract.users();
+    assert_eq!(
+        users_a,
+        Vec::from_array(
+            &e,
+            [
+                UserLiqData {
+                    address: user_a.clone(),
+                    collateral: 10,
+                    min_collateral: 22,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_c.clone(),
+                    collateral: 10,
+                    min_collateral: 22,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_d.clone(),
+                    collateral: 10,
+                    min_collateral: 22,
+                    is_liquidated: false
+                }
+            ]
+        )
+    );
+
+    assert_eq!(
+        users_b,
+        Vec::from_array(
+            &e,
+            [
+                UserLiqData {
+                    address: user_b.clone(),
+                    collateral: 20,
+                    min_collateral: 36,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_e.clone(),
+                    collateral: 20,
+                    min_collateral: 18,
+                    is_liquidated: false
+                }
+            ]
+        )
+    );
+
+    oracle_client.set_spot_rate(&200_000_000_000_000); // 1 USDC  = 2 EURC
+    let (users_a, users_b) = contract.users();
+    assert_eq!(
+        users_a,
+        Vec::from_array(
+            &e,
+            [
+                UserLiqData {
+                    address: user_a.clone(),
+                    collateral: 10,
+                    min_collateral: 10,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_c.clone(),
+                    collateral: 10,
+                    min_collateral: 10,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_d.clone(),
+                    collateral: 10,
+                    min_collateral: 10,
+                    is_liquidated: false
+                }
+            ]
+        )
+    );
+
+    assert_eq!(
+        users_b,
+        Vec::from_array(
+            &e,
+            [
+                UserLiqData {
+                    address: user_b.clone(),
+                    collateral: 20,
+                    min_collateral: 80,
+                    is_liquidated: false
+                },
+                UserLiqData {
+                    address: user_e.clone(),
+                    collateral: 20,
+                    min_collateral: 40,
+                    is_liquidated: false
+                }
+            ]
+        )
+    );
+}
+
 // #[test]
 // fn test_e2e() {
 //     let SwapTest {
