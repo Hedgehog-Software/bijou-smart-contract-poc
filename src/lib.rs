@@ -561,6 +561,11 @@ impl SwapTrait for Swap {
 
         let near_leg_executed = has_near_leg_executed(&e);
         let position_data = get_position_data(&e, &token);
+        let min_collateral = amount * COLLATERAL_BUFFER / 100;
+
+        if collateral < min_collateral {
+            return Err(Error::InsufficientCollateral);
+        }
 
         if !near_leg_executed && !are_positions_open(&position_data) {
             return Err(Error::AllPositionsAreUsed);
@@ -627,9 +632,9 @@ impl SwapTrait for Swap {
                     token_b_data.deposited_amount - token_b_data.swapped_amount;
 
                 swap_amount = min(exp_swap_amount, token_b_available_amount);
+                transfer_b(&e, &from, swap_amount);
                 put_swapped_amount(&e, &from, swap_amount);
                 add_token_swapped_amount(&e, &token_b_data.address, swap_amount);
-                transfer_b(&e, &from, swap_amount);
             } else {
                 let used_deposited_amount = get_used_deposited_amount(&e, &from);
                 let exp_swap_amount = convert_amount_token_b_to_a(used_deposited_amount, spot_rate);
@@ -639,9 +644,9 @@ impl SwapTrait for Swap {
                     token_a_data.deposited_amount - token_a_data.swapped_amount;
 
                 swap_amount = min(exp_swap_amount, token_a_available_amount);
+                transfer_a(&e, &from, swap_amount);
                 put_swapped_amount(&e, &from, swap_amount);
                 add_token_swapped_amount(&e, &token_a_data.address, swap_amount);
-                transfer_a(&e, &from, swap_amount);
             }
         }
 
@@ -667,10 +672,10 @@ impl SwapTrait for Swap {
                 let reclaimed_amount = get_reclaimed_amount(&e, &from);
                 amount = user_deposited_amount - amount_token_b_to_a - reclaimed_amount;
 
-                if amount > 0 {
+                if amount > 9 {
+                    transfer_a(&e, &from, amount);
                     add_token_withdrawn_amount(&e, &token, amount);
                     put_reclaimed_amount(&e, &from, amount);
-                    transfer_a(&e, &from, amount);
                 }
             } else {
                 let user_deposited_amount = get_deposited_amount(&e, &from);
@@ -680,15 +685,15 @@ impl SwapTrait for Swap {
                 let reclaimed_amount = get_reclaimed_amount(&e, &from);
                 amount = user_deposited_amount - amount_token_a_to_b - reclaimed_amount;
 
-                if amount > 0 {
+                if amount > 9 {
+                    transfer_b(&e, &from, amount);
                     add_token_withdrawn_amount(&e, &token, amount);
                     put_reclaimed_amount(&e, &from, amount);
-                    transfer_b(&e, &from, amount);
                 }
             }
         }
 
-        Ok(amount)
+        Ok(if amount > 9 { amount } else { 0 })
     }
 
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error> {
@@ -712,13 +717,13 @@ impl SwapTrait for Swap {
 
         if let Some(token) = get_deposited_token(&e, &from) {
             if token == get_token_a_address(&e) {
-                put_withdrawn_collateral(&e, &from, withdraw_amount);
-                add_token_withdrawn_collateral(&e, &token, withdraw_amount);
                 transfer_a(&e, &from, withdraw_amount);
-            } else {
                 put_withdrawn_collateral(&e, &from, withdraw_amount);
                 add_token_withdrawn_collateral(&e, &token, withdraw_amount);
+            } else {
                 transfer_b(&e, &from, withdraw_amount);
+                put_withdrawn_collateral(&e, &from, withdraw_amount);
+                add_token_withdrawn_collateral(&e, &token, withdraw_amount);
             }
         }
 
