@@ -19,7 +19,7 @@ use position_data::{
     are_positions_open, get_position_a, get_position_b, get_position_data, init_position_a,
     init_position_b, ocupy_one_position,
 };
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Map, Symbol, Vec};
 use storage::{
     get_admin, get_forward_rate, get_init_time, get_spot_rate, get_time_to_mature, put_admin,
     put_forward_rate, put_init_time, put_spot_rate, put_time_to_mature,
@@ -30,7 +30,8 @@ use token_data::{
     get_token_a, get_token_a_address, get_token_b, get_token_b_address, init_token_a, init_token_b,
 };
 use types::{
-    error::Error, position::Position, price_data::PriceData, state::State, token::Token, user::User,
+    error::Error, position::Position, price_data::PriceData, state::State, token::Token,
+    user::User, user_liq_data::UserLiqData,
 };
 use user::{
     get_collateral, get_deposited_amount, get_deposited_token, get_reclaimed_amount,
@@ -77,10 +78,26 @@ fn max_time_reached(e: &Env) -> bool {
     ledger_timestamp >= time_limit
 }
 
-fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i128 {
+fn get_min_collateral(e: &Env, to: &Address, spot_rate: i128, is_deposit_token_a: bool) -> i128 {
+    let og_spot_rate = get_spot_rate(&e);
     let forward_rate = get_forward_rate(&e);
-    let collateral = get_collateral(&e, &to);
     let swapped_amount = get_swapped_amount(&e, &to);
+
+    if is_deposit_token_a {
+        let swapped_amount_as_a = convert_amount_token_b_to_a(swapped_amount, og_spot_rate);
+        let exp_return_as_b = convert_amount_token_a_to_b(swapped_amount_as_a, forward_rate);
+        let exp_col_as_b = (COLLATERAL_BUFFER * exp_return_as_b) / 100;
+        convert_amount_token_b_to_a(exp_col_as_b, spot_rate)
+    } else {
+        let swapped_amount_as_b = convert_amount_token_a_to_b(swapped_amount, og_spot_rate);
+        let exp_return_a = convert_amount_token_b_to_a(swapped_amount_as_b, forward_rate);
+        let exp_col_as_a = (COLLATERAL_BUFFER * exp_return_a) / 100;
+        convert_amount_token_a_to_b(exp_col_as_a, spot_rate)
+    }
+}
+
+fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i128 {
+    let collateral = get_collateral(&e, &to);
     let mut reward_amount: i128 = 0;
 
     let expired_and_not_repaid = max_time_reached(&e) && has_not_repaid(&e, &to);
@@ -90,25 +107,17 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
             // If user deposited a then it swapped b
             // User a needs to have 150 of the corresponding to token b in its collateral
             // we need to convert swapped amount into token a
-            let min_collateral = convert_amount_token_b_to_a(
-                (COLLATERAL_BUFFER * swapped_amount) / 100,
-                forward_rate,
-            );
-            let curr_collateral = convert_amount_token_b_to_a(collateral, spot_price);
+            let min_collateral = get_min_collateral(&e, &to, spot_price, true);
 
-            if (min_collateral > curr_collateral) || expired_and_not_repaid {
+            if (min_collateral > collateral) || expired_and_not_repaid {
                 reward_amount = collateral / 100;
                 put_is_liquidated(&e, &to, true);
                 transfer_a(&e, &from, reward_amount);
             }
         } else {
-            let min_collateral = convert_amount_token_a_to_b(
-                (COLLATERAL_BUFFER * swapped_amount) / 100,
-                forward_rate,
-            );
-            let curr_collateral = convert_amount_token_a_to_b(collateral, spot_price);
+            let min_collateral = get_min_collateral(&e, &to, spot_price, false);
 
-            if (min_collateral > curr_collateral) || expired_and_not_repaid {
+            if (min_collateral > collateral) || expired_and_not_repaid {
                 reward_amount = collateral / 100;
                 put_is_liquidated(&e, &to, true);
                 transfer_b(&e, &from, reward_amount);
@@ -245,6 +254,31 @@ fn calculate_amount_deposit_token_b(
     let total_amount_a: i128 = (positions_token_a as i128) * amount_deposit_token_a;
     let amount_deposit_amount_a: i128 = total_amount_a / (positions_token_b as i128);
     convert_amount_token_a_to_b(amount_deposit_amount_a, spot_rate)
+}
+
+fn get_users_liq_data(
+    e: &Env,
+    deposits: Vec<Position>,
+    is_deposit_token_a: bool,
+) -> Vec<UserLiqData> {
+    let spot_rate = get_oracle_spot_price(&e).price;
+    let mut unique_addresses: Map<Address, bool> = Map::new(&e);
+    let mut users: Vec<UserLiqData> = Vec::new(&e);
+
+    deposits.iter().for_each(|position| {
+        unique_addresses.set(position.address, true);
+    });
+
+    unique_addresses.iter().for_each(|(address, _)| {
+        users.push_back(UserLiqData {
+            address: address.clone(),
+            collateral: get_collateral(&e, &address),
+            min_collateral: get_min_collateral(&e, &address, spot_rate, is_deposit_token_a),
+            is_liquidated: is_liquidated(&e, &address),
+        })
+    });
+
+    users
 }
 
 pub trait SwapTrait {
@@ -451,6 +485,13 @@ pub trait SwapTrait {
     //
     // Tuple containing arrays of deposits: (deposits for Token A, deposits for Token B).
     fn deposits(e: Env) -> (Vec<Position>, Vec<Position>);
+
+    // Returns the users info for liquidation
+    //
+    // # Returns
+    //
+    // Tuple containing arrays of User Data: (Users for Token A, Users for Token B).
+    fn users(e: Env) -> (Vec<UserLiqData>, Vec<UserLiqData>);
 }
 
 #[contract]
@@ -846,5 +887,14 @@ impl SwapTrait for Swap {
 
     fn deposits(e: Env) -> (Vec<Position>, Vec<Position>) {
         (get_used_positions_a(&e), get_used_positions_b(&e))
+    }
+
+    fn users(e: Env) -> (Vec<UserLiqData>, Vec<UserLiqData>) {
+        let deposits_a = get_used_positions_a(&e);
+        let deposits_b = get_used_positions_b(&e);
+        (
+            get_users_liq_data(&e, deposits_a, true),
+            get_users_liq_data(&e, deposits_b, false),
+        )
     }
 }
