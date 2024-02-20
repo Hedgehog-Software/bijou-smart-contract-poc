@@ -925,7 +925,7 @@ fn test_withdraw_liquidated() {
     contract.swap(&user_a);
     contract.swap(&user_b);
     SwapTest::add_time(&e, TIME_TO_MATURE);
-    contract.liq_adm(&user_a, &token_admin, &forward_rate);
+    contract.liquidate(&user_a, &token_admin);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_a);
 }
@@ -1188,7 +1188,7 @@ fn test_liquidate_swap() {
     contract.swap(&user_a);
     contract.swap(&user_b);
     assert_eq!(token_a.balance(&user_b), 900);
-    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
+    let reward_amount = contract.liquidate(&user_a, &token_admin);
     assert_eq!(reward_amount, 1);
     assert_eq!(token_a.balance(&token_admin), 1);
 }
@@ -1224,7 +1224,7 @@ fn test_no_liquidate_swap() {
     contract.swap(&user_a);
     contract.swap(&user_b);
     assert_eq!(token_a.balance(&user_b), 900);
-    let reward_amount = contract.liq_adm(&user_a, &token_admin, &forward_rate);
+    let reward_amount = contract.liquidate(&user_a, &token_admin);
     assert_eq!(reward_amount, 0);
     assert_eq!(token_a.balance(&token_admin), 0);
 }
@@ -1261,7 +1261,7 @@ fn test_liquidate_repay() {
     contract.repay(&user_a, &token_b.address, &900);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     assert_eq!(token_a.balance(&user_b), 900);
-    let reward_amount = contract.liq_adm(&user_b, &token_admin, &forward_rate);
+    let reward_amount = contract.liquidate(&user_b, &token_admin);
     assert_eq!(reward_amount, 1);
     assert_eq!(token_b.balance(&token_admin), 1);
 }
