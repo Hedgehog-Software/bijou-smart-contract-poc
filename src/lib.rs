@@ -528,6 +528,8 @@ impl SwapTrait for Swap {
         positions_token_b: u64,
         amount_deposit_token_a: i128,
     ) -> Result<i128, Error> {
+        from.require_auth();
+
         if !is_authorized(&e, &from) {
             return Err(Error::Unauthorized);
         }
@@ -735,6 +737,7 @@ impl SwapTrait for Swap {
 
     fn liquidate(e: Env, to: Address, from: Address) -> i128 {
         from.require_auth();
+
         let spot_price: i128 = get_oracle_spot_price(&e).price;
         liquidate_user(&e, &to, &from, spot_price)
     }
@@ -797,6 +800,8 @@ impl SwapTrait for Swap {
     }
 
     fn withdraw(e: Env, from: Address) -> Result<i128, Error> {
+        from.require_auth();
+
         let forward_rate = get_forward_rate(&e);
         let returned_amount = get_returned_amount(&e, &from);
         let withdrawn_amount = get_withdrawn_amount(&e, &from);
