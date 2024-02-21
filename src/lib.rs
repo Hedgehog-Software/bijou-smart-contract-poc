@@ -129,15 +129,14 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
 
 fn get_state(e: &Env) -> State {
     let ledger_timestamp = e.ledger().timestamp();
-    let init_time: u64 = get_init_time(&e);
+    let init_time = get_init_time(&e);
     let time_to_mature = get_time_to_mature(&e);
-    let spot_rate = get_spot_rate(&e);
     let time_to_deposit = init_time + TIME_TO_EXEC;
     let time_to_swap = time_to_deposit + time_to_mature;
     let time_limit = time_to_swap + TIME_TO_REPAY;
 
     match ledger_timestamp {
-        ts if ts < time_to_deposit || spot_rate == 0 => State::Deposit,
+        ts if ts < time_to_deposit => State::Deposit,
         ts if ts >= time_to_deposit && ts < time_to_swap => State::Swap,
         ts if ts >= time_to_swap && ts < time_limit => State::Repay,
         _ => State::Withdraw,
@@ -151,8 +150,7 @@ fn get_user_amount_to_repay(e: &Env, to: &Address) -> i128 {
     let swapped_amount = get_swapped_amount(&e, &to);
     let mut repay_amount: i128 = 0;
     if let Some(token) = get_deposited_token(&e, &to) {
-        let token_a_address = get_token_a_address(&e);
-        if token == token_a_address {
+        if token == get_token_a_address(&e) {
             let used_deposited_amount = convert_amount_token_b_to_a(swapped_amount, spot_rate);
             repay_amount = convert_amount_token_a_to_b(used_deposited_amount, forward_rate);
         } else {
@@ -699,12 +697,12 @@ impl SwapTrait for Swap {
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        if is_liquidated(&e, &from) {
-            return Err(Error::LiquidatedUser);
-        }
-
         if !max_time_reached(&e) {
             return Err(Error::ContractStillOpen);
+        }
+
+        if is_liquidated(&e, &from) {
+            return Err(Error::LiquidatedUser);
         }
 
         let collateral_amount = get_collateral(&e, &from);
@@ -826,9 +824,9 @@ impl SwapTrait for Swap {
                 token_a_available_amount,
             );
 
+            transfer_a(&e, &from, withdraw_amount);
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
             put_withdrawn_amount(&e, &from, withdraw_amount);
-            transfer_a(&e, &from, withdraw_amount);
         } else {
             // User returned token_a
             let token_b_data = get_token_b(&e);
@@ -842,9 +840,9 @@ impl SwapTrait for Swap {
                 token_b_available_amount,
             );
 
+            transfer_b(&e, &from, withdraw_amount);
             add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
             put_withdrawn_amount(&e, &from, withdraw_amount);
-            transfer_b(&e, &from, withdraw_amount);
         }
 
         Ok(withdraw_amount)
