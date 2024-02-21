@@ -6,7 +6,6 @@ pub enum DataKey {
     Admin,
     TokenA,
     TokenB,
-    Exp,
     SpotRate,
     ForwardRate,
     InitTime,
