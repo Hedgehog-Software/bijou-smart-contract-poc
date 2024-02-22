@@ -13,6 +13,7 @@ pub(crate) fn init_token_a(e: &Env, token: &Address, name: Symbol) {
             swapped_amount: 0,
             returned_amount: 0,
             withdrawn_amount: 0,
+            reclaimed_amount: 0,
             collateral_amount: 0,
             withdrawn_collateral: 0,
         },
@@ -29,6 +30,7 @@ pub(crate) fn init_token_b(e: &Env, token: &Address, name: Symbol) {
             swapped_amount: 0,
             returned_amount: 0,
             withdrawn_amount: 0,
+            reclaimed_amount: 0,
             collateral_amount: 0,
             withdrawn_collateral: 0,
         },
@@ -92,6 +94,12 @@ pub(crate) fn add_token_returned_amount(e: &Env, token: &Address, amount: i128) 
 pub(crate) fn add_token_withdrawn_amount(e: &Env, token: &Address, amount: i128) {
     let mut token_data = get_token(&e, &token);
     token_data.withdrawn_amount += amount;
+    edit_token(e, &token, token_data);
+}
+
+pub(crate) fn add_token_reclaimed_amount(e: &Env, token: &Address, amount: i128) {
+    let mut token_data = get_token(&e, &token);
+    token_data.reclaimed_amount += amount;
     edit_token(e, &token, token_data);
 }
 
