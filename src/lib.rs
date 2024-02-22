@@ -25,9 +25,10 @@ use storage::{
     put_forward_rate, put_init_time, put_spot_rate, put_time_to_mature,
 };
 use token_data::{
-    add_token_collateral_amount, add_token_deposited_amount, add_token_returned_amount,
-    add_token_swapped_amount, add_token_withdrawn_amount, add_token_withdrawn_collateral,
-    get_token_a, get_token_a_address, get_token_b, get_token_b_address, init_token_a, init_token_b,
+    add_token_collateral_amount, add_token_deposited_amount, add_token_reclaimed_amount,
+    add_token_returned_amount, add_token_swapped_amount, add_token_withdrawn_amount,
+    add_token_withdrawn_collateral, get_token_a, get_token_a_address, get_token_b,
+    get_token_b_address, init_token_a, init_token_b,
 };
 use types::{
     error::Error, position::Position, price_data::PriceData, state::State, token::Token,
@@ -195,6 +196,9 @@ fn calculate_used_deposited_amount(
             acum += base_converted_amount;
             if position.address == user.clone() {
                 used_amount += base_deposit_amount;
+                if acum >= total_other_deposited_amount {
+                    return used_amount - (acum - total_other_deposited_amount);
+                }
             }
             if acum >= total_other_deposited_amount {
                 return used_amount;
@@ -218,26 +222,26 @@ fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
             let total_other_deposited_amount = token_b_data.deposited_amount;
             let base_converted_amount =
                 convert_amount_token_a_to_b(position_a.deposit_amount, spot_rate);
-            return calculate_used_deposited_amount(
+            calculate_used_deposited_amount(
                 user,
                 used_positions_a,
                 total_other_deposited_amount,
                 position_a.deposit_amount,
                 base_converted_amount,
-            );
+            )
         }
         false => {
             let used_positions_b = get_used_positions_b(&e);
             let total_other_deposited_amount = token_a_data.deposited_amount;
             let base_converted_amount =
                 convert_amount_token_b_to_a(position_b.deposit_amount, spot_rate);
-            return calculate_used_deposited_amount(
+            calculate_used_deposited_amount(
                 user,
                 used_positions_b,
                 total_other_deposited_amount,
                 position_b.deposit_amount,
                 base_converted_amount,
-            );
+            )
         }
     }
 }
@@ -656,44 +660,32 @@ impl SwapTrait for Swap {
     fn reclaim(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        if !max_time_reached(&e) {
-            return Err(Error::ContractStillOpen);
+        if get_state(&e) == State::Deposit {
+            return Err(Error::ExecutionTimeNotReached);
         }
 
-        let mut amount: i128 = 0;
+        let deposited_amount = get_deposited_amount(&e, &from);
+        let used_deposited_amount = get_used_deposited_amount(&e, &from);
+        let reclaimed_amount = get_reclaimed_amount(&e, &from);
+        let amount = deposited_amount - used_deposited_amount - reclaimed_amount;
 
-        let spot_rate = get_spot_rate(&e);
+        if amount <= 9 {
+            return Ok(0);
+        }
+
         if let Some(token) = get_deposited_token(&e, &from) {
             if token == get_token_a_address(&e) {
-                let user_deposited_amount = get_deposited_amount(&e, &from);
-                let user_swapped_amount = get_swapped_amount(&e, &from);
-                let amount_token_b_to_a =
-                    convert_amount_token_b_to_a(user_swapped_amount, spot_rate);
-                let reclaimed_amount = get_reclaimed_amount(&e, &from);
-                amount = user_deposited_amount - amount_token_b_to_a - reclaimed_amount;
-
-                if amount > 9 {
-                    transfer_a(&e, &from, amount);
-                    add_token_withdrawn_amount(&e, &token, amount);
-                    put_reclaimed_amount(&e, &from, amount);
-                }
+                transfer_a(&e, &from, amount);
+                add_token_reclaimed_amount(&e, &token, amount);
+                put_reclaimed_amount(&e, &from, amount);
             } else {
-                let user_deposited_amount = get_deposited_amount(&e, &from);
-                let user_swapped_amount = get_swapped_amount(&e, &from);
-                let amount_token_a_to_b =
-                    convert_amount_token_a_to_b(user_swapped_amount, spot_rate);
-                let reclaimed_amount = get_reclaimed_amount(&e, &from);
-                amount = user_deposited_amount - amount_token_a_to_b - reclaimed_amount;
-
-                if amount > 9 {
-                    transfer_b(&e, &from, amount);
-                    add_token_withdrawn_amount(&e, &token, amount);
-                    put_reclaimed_amount(&e, &from, amount);
-                }
+                transfer_b(&e, &from, amount);
+                add_token_reclaimed_amount(&e, &token, amount);
+                put_reclaimed_amount(&e, &from, amount);
             }
         }
 
-        Ok(if amount > 9 { amount } else { 0 })
+        Ok(amount)
     }
 
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error> {
@@ -806,8 +798,8 @@ impl SwapTrait for Swap {
         let returned_amount = get_returned_amount(&e, &from);
         let withdrawn_amount = get_withdrawn_amount(&e, &from);
         let deposited_token = get_deposited_token(&e, &from).unwrap();
-        let withdraw_amount: i128;
         let token_a_data = get_token_a(&e);
+        let withdraw_amount: i128;
 
         if !max_time_reached(&e) {
             return Err(Error::TimeNotReached);
