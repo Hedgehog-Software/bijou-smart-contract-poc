@@ -4,7 +4,7 @@ extern crate std;
 use crate::constants::{
     COLLATERAL_BUFFER, ORACLE_ADDRESS, SCALE, TIME_TO_EXEC, TIME_TO_MATURE, TIME_TO_REPAY,
 };
-use crate::types::state::State;
+use crate::types::stage::Stage;
 use crate::types::user::User;
 use crate::types::user_liq_data::UserLiqData;
 use crate::types::{position::Position, storage::DataKey};
@@ -1757,7 +1757,7 @@ fn test_one_to_many_position() {
 }
 
 #[test]
-fn test_state() {
+fn test_stage() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
         e,
@@ -1776,17 +1776,17 @@ fn test_state() {
         &forward_rate,
         &TIME_TO_MATURE,
     );
-    let state = contract.state();
-    assert_eq!(state, State::Deposit);
+    let stage = contract.stage();
+    assert_eq!(stage, Stage::Deposit);
     SwapTest::add_time(&e, TIME_TO_EXEC);
-    let state = contract.state();
-    assert_eq!(state, State::Swap);
+    let stage = contract.stage();
+    assert_eq!(stage, Stage::Swap);
     SwapTest::add_time(&e, TIME_TO_MATURE);
-    let state = contract.state();
-    assert_eq!(state, State::Repay);
+    let stage = contract.stage();
+    assert_eq!(stage, Stage::Repay);
     SwapTest::add_time(&e, TIME_TO_REPAY);
-    let state = contract.state();
-    assert_eq!(state, State::Withdraw);
+    let stage = contract.stage();
+    assert_eq!(stage, Stage::Withdraw);
 }
 
 #[test]

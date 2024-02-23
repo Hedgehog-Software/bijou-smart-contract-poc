@@ -4,7 +4,7 @@ pub mod error;
 pub mod position;
 pub mod position_data;
 pub mod price_data;
-pub mod state;
+pub mod stage;
 pub mod storage;
 pub mod token;
 pub mod user;

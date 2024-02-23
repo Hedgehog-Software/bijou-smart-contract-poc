@@ -31,7 +31,7 @@ use token_data::{
     get_token_b_address, init_token_a, init_token_b,
 };
 use types::{
-    error::Error, position::Position, price_data::PriceData, state::State, token::Token,
+    error::Error, position::Position, price_data::PriceData, stage::Stage, token::Token,
     user::User, user_liq_data::UserLiqData,
 };
 use user::{
@@ -68,7 +68,7 @@ fn set_spot_price(e: &Env) -> PriceData {
 }
 
 fn has_near_leg_executed(e: &Env) -> bool {
-    get_state(&e) >= State::Swap
+    get_stage(&e) >= Stage::Swap
 }
 
 fn max_time_reached(e: &Env) -> bool {
@@ -128,7 +128,7 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
     reward_amount
 }
 
-fn get_state(e: &Env) -> State {
+fn get_stage(e: &Env) -> Stage {
     let ledger_timestamp = e.ledger().timestamp();
     let init_time = get_init_time(&e);
     let time_to_mature = get_time_to_mature(&e);
@@ -137,10 +137,10 @@ fn get_state(e: &Env) -> State {
     let time_limit = time_to_swap + TIME_TO_REPAY;
 
     match ledger_timestamp {
-        ts if ts < time_to_deposit => State::Deposit,
-        ts if ts >= time_to_deposit && ts < time_to_swap => State::Swap,
-        ts if ts >= time_to_swap && ts < time_limit => State::Repay,
-        _ => State::Withdraw,
+        ts if ts < time_to_deposit => Stage::Deposit,
+        ts if ts >= time_to_deposit && ts < time_to_swap => Stage::Swap,
+        ts if ts >= time_to_swap && ts < time_limit => Stage::Repay,
+        _ => Stage::Withdraw,
     }
 }
 
@@ -357,7 +357,7 @@ pub trait SwapTrait {
     fn near_leg(e: Env) -> Result<PriceData, Error>;
 
     // Transfers the desired token
-    // Can only be called in the Execution State.
+    // Can only be called in the Execution Stage.
     //
     // # Arguments
     //
@@ -474,12 +474,12 @@ pub trait SwapTrait {
     // None.
     fn set_spot(e: Env, from: Address, rate: i128) -> Result<(), Error>;
 
-    // Returns the current state.
+    // Returns the current stage.
     //
     // # Returns
     //
-    // Contract State.
-    fn state(e: Env) -> State;
+    // Contract Stage.
+    fn stage(e: Env) -> Stage;
 
     // Returns the deposits made in each token.
     //
@@ -619,8 +619,8 @@ impl SwapTrait for Swap {
     fn swap(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        if get_state(&e) != State::Swap {
-            return Err(Error::WrongStateToSwap);
+        if get_stage(&e) != Stage::Swap {
+            return Err(Error::WrongStageToSwap);
         }
 
         let mut swap_amount: i128 = 0;
@@ -660,7 +660,7 @@ impl SwapTrait for Swap {
     fn reclaim(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        if get_state(&e) == State::Deposit {
+        if get_stage(&e) == Stage::Deposit {
             return Err(Error::TimeNotReached);
         }
 
@@ -881,8 +881,8 @@ impl SwapTrait for Swap {
         Ok(put_spot_rate(&e, amount))
     }
 
-    fn state(e: Env) -> State {
-        get_state(&e)
+    fn stage(e: Env) -> Stage {
+        get_stage(&e)
     }
 
     fn deposits(e: Env) -> (Vec<Position>, Vec<Position>) {
