@@ -6,7 +6,7 @@ use soroban_sdk::contracterror;
 pub enum Error {
     DifferentDepositedToken = 1,
     WrongRepayToken = 2,
-    ExecutionTimeNotReached = 3,
+    InsufficientCollateral = 3,
     SpotRateAlreadyDefined = 4,
     LiquidatedUser = 5,
     TimeNotReached = 6,
@@ -17,9 +17,6 @@ pub enum Error {
     AlreadyRepaid = 11,
     Unauthorized = 12,
     ContractAlreadyInitialized = 13,
-    PositionsAlreadyInitialized = 14,
+    AllPositionsAreUsed = 14,
     DepositAmountDoesntMatchPosition = 15,
-    AllPositionsAreUsed = 16,
-    NotEnoughtPositionsUsed = 17,
-    InsufficientCollateral = 18,
 }

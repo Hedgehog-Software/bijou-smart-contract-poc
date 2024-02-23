@@ -661,7 +661,7 @@ impl SwapTrait for Swap {
         from.require_auth();
 
         if get_state(&e) == State::Deposit {
-            return Err(Error::ExecutionTimeNotReached);
+            return Err(Error::TimeNotReached);
         }
 
         let deposited_amount = get_deposited_amount(&e, &from);
@@ -855,7 +855,7 @@ impl SwapTrait for Swap {
 
     fn near_leg(e: Env) -> Result<PriceData, Error> {
         if !near_leg_time_reached(&e) {
-            return Err(Error::ExecutionTimeNotReached);
+            return Err(Error::TimeNotReached);
         }
 
         if get_spot_rate(&e) != 0 {
