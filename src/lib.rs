@@ -100,8 +100,11 @@ fn get_min_collateral(e: &Env, to: &Address, spot_rate: i128, is_deposit_token_a
 fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i128 {
     let collateral = get_collateral(&e, &to);
     let mut reward_amount: i128 = 0;
-
     let expired_and_not_repaid = max_time_reached(&e) && has_not_repaid(&e, &to);
+
+    if is_liquidated(&e, &to) {
+        return 0;
+    }
 
     if let Some(token) = get_deposited_token(&e, &to) {
         if token == get_token_a_address(&e) {

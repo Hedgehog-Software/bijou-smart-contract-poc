@@ -1423,6 +1423,46 @@ fn test_liquidate_repay() {
 }
 
 #[test]
+fn test_liquidate_liquidated_user() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &100, &100, &800);
+    contract.deposit(&user_a, &token_a.address, &800, &200);
+    contract.deposit(&user_b, &token_b.address, &800, &200);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+    assert_eq!(token_a.balance(&user_b), 800);
+    oracle_client.set_spot_rate(&70_000_000_000_000);
+    let reward_amount = contract.liquidate(&user_a, &token_admin);
+    assert_eq!(reward_amount, 2);
+    assert_eq!(token_a.balance(&token_admin), 2);
+
+    let reward_amount = contract.liquidate(&user_a, &token_admin);
+    assert_eq!(reward_amount, 0);
+    assert_eq!(token_a.balance(&token_admin), 2);
+}
+
+#[test]
 fn test_forward_bigger_than_spot() {
     let SwapTest {
         e,
