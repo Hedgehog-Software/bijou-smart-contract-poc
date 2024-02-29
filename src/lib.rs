@@ -698,13 +698,18 @@ impl SwapTrait for Swap {
             return Err(Error::ContractStillOpen);
         }
 
-        if is_liquidated(&e, &from) {
-            return Err(Error::LiquidatedUser);
-        }
+        let min_col = if is_liquidated(&e, &from) {
+            let spot_rate = get_oracle_spot_price(&e).price;
+            let deposited_token = get_deposited_token(&e, &from).unwrap();
+            let token_a_address = get_token_a_address(&e);
+            get_min_collateral(&e, &from, spot_rate, token_a_address == deposited_token)
+        } else {
+            0
+        };
 
         let collateral_amount = get_collateral(&e, &from);
         let withdrawn_collateral_amount = get_withdrawn_collateral(&e, &from);
-        let withdraw_amount = collateral_amount - withdrawn_collateral_amount;
+        let withdraw_amount = collateral_amount - withdrawn_collateral_amount - min_col;
 
         if withdraw_amount <= 0 {
             return Ok(0);

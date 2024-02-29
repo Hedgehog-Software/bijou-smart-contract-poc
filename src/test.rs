@@ -1302,13 +1302,52 @@ fn test_reclaim_collateral() {
     SwapTest::add_time(&e, TIME_TO_MATURE);
     contract.repay(&user_a, &token_b.address, &100);
     contract.repay(&user_b, &token_a.address, &100);
-    SwapTest::add_time(&e, TIME_TO_MATURE);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_a);
     assert_eq!(token_a.balance(&user_a), 980);
 
     let reclaimed_collateral = contract.reclaim_col(&user_a);
     assert_eq!(reclaimed_collateral, 20);
     assert_eq!(token_a.balance(&user_a), 1000);
+}
+
+#[test]
+fn test_liquidated_reclaim_col() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &100, &50, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &200);
+    contract.deposit(&user_b, &token_b.address, &200, &400);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+    let reward_amount = contract.liquidate(&user_a, &token_admin);
+    assert_eq!(reward_amount, 2);
+    oracle_client.set_spot_rate(&50_000_000_000_000);
+    let reclaimed_collateral = contract.reclaim_col(&user_a);
+    assert_eq!(reclaimed_collateral, 160);
+    assert_eq!(token_a.balance(&user_a), 860);
 }
 
 #[test]
