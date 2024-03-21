@@ -694,11 +694,7 @@ impl SwapTrait for Swap {
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        if !max_time_reached(&e) {
-            return Err(Error::ContractStillOpen);
-        }
-
-        let min_col = if is_liquidated(&e, &from) {
+        let min_col = if is_liquidated(&e, &from) || !max_time_reached(&e) {
             let spot_rate = get_oracle_spot_price(&e).price;
             let deposited_token = get_deposited_token(&e, &from).unwrap();
             let token_a_address = get_token_a_address(&e);
