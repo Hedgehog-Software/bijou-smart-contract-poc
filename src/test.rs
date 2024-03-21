@@ -393,35 +393,6 @@ fn test_mature_date_error_withdraw() {
 }
 
 #[test]
-#[should_panic]
-fn test_mature_date_error_reclaim_col() {
-    let forward_rate: i128 = SCALE;
-    let SwapTest {
-        token_admin,
-        token_a,
-        token_b,
-        user_a,
-        user_b,
-        contract,
-        ..
-    } = SwapTest::setup();
-
-    contract.initialize(
-        &token_admin,
-        &token_a.address,
-        &token_b.address,
-        &symbol_short!("USDC"),
-        &symbol_short!("EURC"),
-        &forward_rate,
-        &TIME_TO_MATURE,
-    );
-    contract.init_pos(&token_admin, &100, &50, &100);
-    contract.deposit(&user_a, &token_a.address, &100, &20);
-    contract.deposit(&user_b, &token_b.address, &200, &40);
-    contract.reclaim_col(&user_a);
-}
-
-#[test]
 fn test_set_spot_rate() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
@@ -843,6 +814,7 @@ fn test_balance() {
             reclaimed_amount: 0,
             withdrawn_amount: 0,
             collateral: 20,
+            withdrawn_collateral: 0,
             is_liquidated: false,
         }
     );
@@ -1381,6 +1353,42 @@ fn test_liquidate_swap() {
     contract.swap(&user_b);
     assert_eq!(token_a.balance(&user_b), 800);
     oracle_client.set_spot_rate(&70_000_000_000_000);
+    let reward_amount = contract.liquidate(&user_a, &token_admin);
+    assert_eq!(reward_amount, 2);
+    assert_eq!(token_a.balance(&token_admin), 2);
+}
+
+#[test]
+fn test_liquidate_reclaimed_collateral() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &100, &100, &800);
+    contract.deposit(&user_a, &token_a.address, &800, &200);
+    contract.deposit(&user_b, &token_b.address, &800, &200);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+    oracle_client.set_spot_rate(&70_000_000_000_000);
+    contract.reclaim_col(&user_a);
     let reward_amount = contract.liquidate(&user_a, &token_admin);
     assert_eq!(reward_amount, 2);
     assert_eq!(token_a.balance(&token_admin), 2);
