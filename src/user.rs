@@ -79,6 +79,7 @@ pub(crate) fn get_user_balance(e: &Env, to: &Address) -> User {
         withdrawn_amount: get_withdrawn_amount(&e, &to),
         reclaimed_amount: get_reclaimed_amount(&e, &to),
         collateral: get_collateral(&e, &to),
+        withdrawn_collateral: get_withdrawn_collateral(&e, &to),
         is_liquidated: is_liquidated(&e, &to),
     }
 }

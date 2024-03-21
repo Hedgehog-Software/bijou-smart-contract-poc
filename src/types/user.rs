@@ -10,5 +10,6 @@ pub struct User {
     pub withdrawn_amount: i128,
     pub reclaimed_amount: i128,
     pub collateral: i128,
+    pub withdrawn_collateral: i128,
     pub is_liquidated: bool,
 }
