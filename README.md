@@ -17,7 +17,7 @@ cargo build --target wasm32-unknown-unknown --release
 # To Deploy
 
 ```
-soroban contract deploy --wasm target/wasm32-unknown-unknown/release/swap_contract.wasm --source alice --network testnet
+soroban contract deploy --wasm target/wasm32-unknown-unknown/release/swap_contract.wasm --network testnet --source alice
 ```
 Returns the Contract ID ex: `CASIPFCJIRH5BLAJKLY6KNYXGP6JOI4DGMTBBX7D7OHO32PGPLPEYFNG`
 
@@ -28,10 +28,10 @@ contract_id=CA7M3K4Q2GDQML6354N4ZSJW42R2G33IIV3MTX67UKXHWGVWBWEMZTHR \
 token_a=CAXU27NOCRBFTNUPR7ROLD4CAAHBQ55Z6T7GCREPRFDR5ED2PCVR5LFQ \
 token_b=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
 
-soroban contract invoke --id $contract_id --network testnet -- initialize --admin alice --token_a $token_a --token_b $token_b --name_token_a USDC --name_token_b EURC --forward_rate 100000000000000 --duration 300
+soroban contract invoke --id $contract_id --network testnet --source alice -- initialize --admin alice --token_a $token_a --token_b $token_b --name_token_a USDC --name_token_b EURC --forward_rate 100000000000000 --duration 604800
 
 
-soroban contract invoke --id $contract_id --network testnet -- initialize --admin  --token_a CAWH4XMRQL7AJZCXEJVRHHMT6Y7ZPFCQCSKLIFJL3AVIQNC5TSVWKQOR --token_b CCBINL4TCQVEQN2Q2GO66RS4CWUARIECZEJA7JVYQO3GVF4LG6HJN236 $token_b --name_token_a USDC --name_token_b EURC --forward_rate 100000000000000 --duration 300
+soroban contract invoke --id $contract_id --network testnet -- initialize --admin  --token_a CAWH4XMRQL7AJZCXEJVRHHMT6Y7ZPFCQCSKLIFJL3AVIQNC5TSVWKQOR --token_b CCBINL4TCQVEQN2Q2GO66RS4CWUARIECZEJA7JVYQO3GVF4LG6HJN236 $token_b --name_token_a USDC --name_token_b EURC --forward_rate 100000000000000 --duration 604800
 ```
 
 ## Common tokens for testnet
@@ -52,76 +52,91 @@ soroban lab token wrap --network testnet --source alice --asset "USDC:GBBD47IF6L
 
 # Set up Positions
 ```
-soroban contract invoke --id $contract_id --network testnet -- init_pos --from alice --positions_token_a 2 --positions_token_b 2 --amount_deposit_token_a 10000000 --amount_deposit_token_b 10000000
+soroban contract invoke --id $contract_id --network testnet --source alice -- init_pos --from alice --positions_token_a 2 --positions_token_b 2 --amount_deposit_token_a 1000000
 ```
 
 
 # Deposit
 ```
-soroban contract invoke --id $contract_id --network testnet -- deposit --from alice --token $token_a --amount 10000000 --collateral 2000000
+soroban contract invoke --id $contract_id --network testnet --source alice -- deposit --from alice --token $token_a --amount 1000000 --collateral 200000
 
-soroban contract invoke --id $contract_id --source bob --network testnet -- deposit --from bob --token $token_b --amount 10000000 --collateral 2000000
+soroban contract invoke --id $contract_id --network testnet --source bob -- deposit --from bob --token $token_b --amount 1000000 --collateral 200000
 ```
 
-# Execute near leg
+# Execute near leg (Optional, only if there was an error during initialization)
 ```
 soroban contract invoke --id $contract_id --network testnet -- near_leg
 ```
 
 # Get Spot Rate
 ```
-soroban contract invoke --id $contract_id --source bob --network testnet -- spot_rate
+soroban contract invoke --id $contract_id --source alice --network testnet -- spot_rate
 ```
 
 # Swap Assets
 ```
-soroban contract invoke --id $contract_id --network testnet -- swap --from alice
+soroban contract invoke --id $contract_id --network testnet --source alice -- swap --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- swap --from bob
+soroban contract invoke --id $contract_id --network testnet --source bob -- swap --from bob
 ```
 
 # Repay Asset
 ```
-soroban contract invoke --id $contract_id --network testnet -- repay --from alice --token $token_b --amount 10000000
+soroban contract invoke --id $contract_id --network testnet --source alice -- repay --from alice --token $token_b --amount 10000000
 
-soroban contract invoke --id $contract_id --network testnet -- repay --from bob --token $token_a --amount 10000000
+soroban contract invoke --id $contract_id --network testnet --source bob -- repay --from bob --token $token_a --amount 10000000
 ```
 
 # Withdraw Original Asset
 ```
-soroban contract invoke --id $contract_id --network testnet -- withdraw --from alice
+soroban contract invoke --id $contract_id --network testnet --source alice -- withdraw --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- withdraw --from bob
+soroban contract invoke --id $contract_id --network testnet --source bob -- withdraw --from bob
 ```
 
 # Reclaim unused deposit
 ```
-soroban contract invoke --id $contract_id --network testnet -- reclaim --from alice
+soroban contract invoke --id $contract_id --network testnet --source alice -- reclaim --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- reclaim --from bob
+soroban contract invoke --id $contract_id --network testnet --source bob -- reclaim --from bob
 ```
 
 # Reclaim Collateral
 ```
-soroban contract invoke --id $contract_id --network testnet -- reclaim_col --from alice
+soroban contract invoke --id $contract_id --network testnet --source alice -- reclaim_col --from alice
 
-soroban contract invoke --id $contract_id --network testnet -- reclaim_col --from bob
+soroban contract invoke --id $contract_id --network testnet --source bob -- reclaim_col --from bob
 ```
 
 # Liquidate User
 ```
-soroban contract invoke --id $contract_id --network testnet -- liquidate --from alice --to bob
+soroban contract invoke --id $contract_id --network testnet --source alice -- liquidate --from alice --to bob
 ```
 
 -----------------------
 # Install WASM to use in the deployer
 ```
-soroban contract install --wasm ./target/wasm32-unknown-unknown/release/swap_contract.wasm --network testnet
+soroban contract install --wasm ./target/wasm32-unknown-unknown/release/swap_contract.wasm --network testnet --source alice
 ```
 Returns contract wasm ex: `d6000267f42d63bb6c845cc62bd616d11d446bc97b2b7ec25a2c43e98d4307f0`
 
-
-
+# Deploy using the deployer
+```
+soroban contract invoke \
+    --id CAMWD3ZGESCWMN2SGC2UC4JWI3BBURVWUF46JIHJSAZNRTX32X4NFRRQ \
+    --source alice \
+    --network testnet \
+    -- deploy \
+    --salt 0000000000000000000000000000000000000000000000000000000000000000 \    --deployer CAMWD3ZGESCWMN2SGC2UC4JWI3BBURVWUF46JIHJSAZNRTX32X4NFRRQ \
+    --wasm_hash ed24fd3c946e6f9830e240f28333533d6527c0f4e404665b67b39e75a8b4a51a \
+    --init_fn initialize
+    --init_args '[{"address":"GD324GL3IVXNY4GR4JOWINAD3RHYNVYN4LT4HH4QC7CTHN7ZJBHU4AEX"},{"address":"CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"},{"address":"CCUUDM434BMZMYWYDITHFXHDMIVTGGD6T2I5UKNX5BSLXLW7HVR4MCGZ"},
+    {"symbol":"USDC"},
+    {"symbol":"EURC"},
+    {"i128":[1000000,0]},
+    {"u64":3600}
+    ]'
+```
 ------------------------
 # Using custom tokens
 ------------------------
