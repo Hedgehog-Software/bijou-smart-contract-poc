@@ -386,8 +386,6 @@ pub trait SwapTrait {
     // Reward amount if address liquidated, 0 if it was not or collateral was too low.
     fn liquidate(e: Env, to: Address, from: Address) -> i128;
 
-    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> Result<i128, Error>;
-
     // Repays the amount previously swapped.
     //
     // # Arguments
@@ -737,15 +735,6 @@ impl SwapTrait for Swap {
 
         let spot_price: i128 = get_oracle_spot_price(&e).price;
         liquidate_user(&e, &to, &from, spot_price)
-    }
-
-    fn liq_adm(e: Env, to: Address, from: Address, spot_price: i128) -> Result<i128, Error> {
-        from.require_auth();
-
-        match is_authorized(&e, &from) {
-            true => Ok(liquidate_user(&e, &to, &from, spot_price)),
-            false => Err(Error::Unauthorized),
-        }
     }
 
     fn repay(e: Env, from: Address, token: Address, amount: i128) -> Result<(i128, i128), Error> {
