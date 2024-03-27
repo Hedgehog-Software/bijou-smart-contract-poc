@@ -633,6 +633,91 @@ fn test_swap_with_order_not_enough() {
 }
 
 #[test]
+fn test_reclaim_used_position_and_swap() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &100, &50, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    let reclaimed_a = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_a, 0);
+    assert_eq!(token_a.balance(&user_a), 880);
+
+    let swapped_a = contract.swap(&user_a);
+    let swapped_b = contract.swap(&user_b);
+
+    assert_eq!(swapped_a, 100);
+    assert_eq!(token_b.balance(&user_a), 100);
+
+    assert_eq!(swapped_b, 100);
+    assert_eq!(token_a.balance(&user_b), 100);
+}
+
+#[test]
+fn test_reclaim_unused_position_and_swap() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &100, &50, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &200, &40);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    assert_eq!(token_a.balance(&user_a), 640);
+    let reclaimed_a = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_a, 100);
+    assert_eq!(token_a.balance(&user_a), 740);
+
+    let swapped_a = contract.swap(&user_a);
+    let swapped_b = contract.swap(&user_b);
+
+    assert_eq!(swapped_a, 200);
+    assert_eq!(token_b.balance(&user_a), 200);
+
+    assert_eq!(swapped_b, 200);
+    assert_eq!(token_a.balance(&user_b), 200);
+}
+
+#[test]
 fn test_repay_a() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
@@ -2098,9 +2183,8 @@ fn test_users() {
 //         &token_admin,
 //         &token_a.address,
 //         &token_b.address,
-//         &symbol_short!("GBP"),
 //         &symbol_short!("USD"),
-//         &spot_rate,
+//         &symbol_short!("GBP"),
 //         &forward_rate,
 //         &TIME_TO_MATURE,
 //     );
@@ -2109,7 +2193,6 @@ fn test_users() {
 //         &1,
 //         &1,
 //         &(10_000_000 * decimals),
-//         &(8_000_000 * decimals),
 //     );
 //     contract.deposit(&user_a, &token_a.address, &(10_000_000 * decimals), &1_000);
 //     contract.deposit(&user_b, &token_b.address, &(8_000_000 * decimals), &1_000);
