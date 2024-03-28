@@ -693,14 +693,20 @@ impl SwapTrait for Swap {
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error> {
         from.require_auth();
 
-        let min_col = if is_liquidated(&e, &from) || !max_time_reached(&e) {
-            let spot_rate = get_oracle_spot_price(&e).price;
-            let deposited_token = get_deposited_token(&e, &from).unwrap();
-            let token_a_address = get_token_a_address(&e);
-            get_min_collateral(&e, &from, spot_rate, token_a_address == deposited_token)
-        } else {
-            0
-        };
+        if get_stage(&e) == Stage::Deposit {
+            return Err(Error::TimeNotReached);
+        }
+
+        let used_deposited_amount = get_used_deposited_amount(&e, &from);
+        let min_col =
+            if used_deposited_amount != 0 && (is_liquidated(&e, &from) || !max_time_reached(&e)) {
+                let spot_rate = get_oracle_spot_price(&e).price;
+                let deposited_token = get_deposited_token(&e, &from).unwrap();
+                let token_a_address = get_token_a_address(&e);
+                get_min_collateral(&e, &from, spot_rate, token_a_address == deposited_token)
+            } else {
+                0
+            };
 
         let collateral_amount = get_collateral(&e, &from);
         let withdrawn_collateral_amount = get_withdrawn_collateral(&e, &from);
