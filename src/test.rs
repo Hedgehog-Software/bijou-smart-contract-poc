@@ -2158,74 +2158,165 @@ fn test_users() {
     );
 }
 
-// #[test]
-// fn test_e2e() {
-//     let SwapTest {
-//         e,
-//         token_admin,
-//         user_a,
-//         user_b,
-//         token_a,
-//         token_b,
-//         contract,
-//         token_admin_client_a,
-//         token_admin_client_b,
-//         ..
-//     } = SwapTest::setup();
-//     let spot_rate: i128 = 90_000_000_000_000;
-//     let forward_rate: i128 = 80_000_000_000_000;
-//     let decimals = 100_000_000;
+#[test]
+fn test_e2e_round_values() {
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        token_admin_client_b,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    let spot_rate: i128 = 90_000_000_000_000;
+    let forward_rate: i128 = 91_000_000_000_000;
 
-//     token_admin_client_a.mint(&user_a, &(10_000_000 * decimals));
-//     token_admin_client_b.mint(&user_b, &(10_000_000 * decimals));
+    token_admin_client_a.mint(&user_a, &11_999_000);
+    token_admin_client_b.mint(&user_b, &10_799_000);
+    oracle_client.set_spot_rate(&spot_rate);
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USD"),
+        &symbol_short!("GBP"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &2, &2, &10_000_000);
+    contract.deposit(&user_a, &token_a.address, &10_000_000, &2_000_000);
+    contract.deposit(&user_b, &token_b.address, &9_000_000, &1_800_000);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
 
-//     contract.initialize(
-//         &token_admin,
-//         &token_a.address,
-//         &token_b.address,
-//         &symbol_short!("USD"),
-//         &symbol_short!("GBP"),
-//         &forward_rate,
-//         &TIME_TO_MATURE,
-//     );
-//     contract.init_pos(
-//         &token_admin,
-//         &1,
-//         &1,
-//         &(10_000_000 * decimals),
-//     );
-//     contract.deposit(&user_a, &token_a.address, &(10_000_000 * decimals), &1_000);
-//     contract.deposit(&user_b, &token_b.address, &(8_000_000 * decimals), &1_000);
-//     SwapTest::add_time(&e, TIME_TO_EXEC);
+    let swapped_amount_a = contract.swap(&user_a);
+    let swapped_amount_b = contract.swap(&user_b);
+    assert_eq!(swapped_amount_a, 9_000_000);
+    assert_eq!(swapped_amount_b, 10_000_000);
 
-//     let swapped_amount_a = contract.swap(&user_a);
-//     let swapped_amount_b = contract.swap(&user_b);
-//     assert_eq!(swapped_amount_a, (8_000_000 * decimals));
-//     assert_eq!(swapped_amount_b, 888_888_888_888_888);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
 
-//     SwapTest::add_time(&e, TIME_TO_MATURE);
+    token_admin_client_b.mint(&user_a, &100_000);
+    let repay_a = contract.repay(&user_a, &token_b.address, &9_100_000);
+    let repay_b = contract.repay(&user_b, &token_a.address, &10_000_000);
 
-//     token_admin_client_a.mint(&user_b, &(3_000_000 * decimals));
-//     let repay_a = contract.repay(&user_a, &token_b.address, &800_000_000_000_000);
-//     let repay_b = contract.repay(&user_b, &token_a.address, &(10_000_000 * decimals));
+    assert_eq!(repay_a, (9_100_000, 9_100_000));
+    assert_eq!(repay_b, (10_000_000, 10_000_000));
 
-//     assert_eq!(repay_a, (800_000_000_000_000, 800_000_000_000_000));
-//     assert_eq!(repay_b, (999999999999998, 999999999999998));
+    SwapTest::add_time(&e, TIME_TO_REPAY);
 
-//     SwapTest::add_time(&e, TIME_TO_REPAY);
+    let withdrawn_amount_a = contract.withdraw(&user_a);
+    let withdrawn_amount_b = contract.withdraw(&user_b);
+    assert_eq!(withdrawn_amount_a, 10_000_000);
+    assert_eq!(withdrawn_amount_b, 9_100_000);
+    assert_eq!(token_a.balance(&user_a), 10_000_000);
+    assert_eq!(token_b.balance(&user_b), 9_100_000);
 
-//     let withdrawn_amount_a = contract.withdraw(&user_a);
-//     let withdrawn_amount_b = contract.withdraw(&user_b);
-//     assert_eq!(withdrawn_amount_a, 999999999999998);
-//     assert_eq!(withdrawn_amount_b, 799999999999998);
+    let reclaim_amount_a = contract.reclaim(&user_a);
+    let reclaim_amount_b = contract.reclaim(&user_b);
+    assert_eq!(reclaim_amount_a, 0);
+    assert_eq!(reclaim_amount_b, 0);
+    assert_eq!(token_a.balance(&user_a), 10_000_000);
+    assert_eq!(token_b.balance(&user_b), 9_100_000);
 
-//     let reclaim_amount_a = contract.reclaim(&user_a);
-//     let reclaim_amount_b = contract.reclaim(&user_b);
-//     assert_eq!(reclaim_amount_a, 111111111111112);
-//     assert_eq!(reclaim_amount_b, 1);
-//     // assert_eq!(token_a.balance(&user_a), 997_244_419_950);
-//     // assert_eq!(token_b.balance(&user_b), 999_999_999_997);
-// }
+    let reclaim_col_a = contract.reclaim_col(&user_a);
+    let reclaim_col_b = contract.reclaim_col(&user_b);
+    assert_eq!(reclaim_col_a, 2_000_000);
+    assert_eq!(reclaim_col_b, 1_800_000);
+
+    assert_eq!(token_a.balance(&user_a), 12_000_000);
+    assert_eq!(token_b.balance(&user_b), 10_900_000);
+}
+
+#[test]
+fn test_e2e() {
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        token_admin_client_b,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    let spot_rate: i128 = 91_863_245_477_859;
+    let forward_rate: i128 = 91_942_156_764_123;
+    let user_c = Address::generate(&e);
+
+    token_admin_client_a.mint(&user_a, &11_999_000);
+    token_admin_client_b.mint(&user_b, &11_022_589);
+    token_admin_client_a.mint(&user_c, &12_000_000);
+
+    oracle_client.set_spot_rate(&spot_rate);
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USD"),
+        &symbol_short!("GBP"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &2, &2, &10_000_000);
+    contract.deposit(&user_a, &token_a.address, &10_000_000, &2_000_000);
+    contract.deposit(&user_b, &token_b.address, &9_186_324, &1_837_265);
+    contract.deposit(&user_c, &token_a.address, &10_000_000, &2_000_000);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+
+    let swapped_amount_c = contract.swap(&user_c);
+    let swapped_amount_a = contract.swap(&user_a);
+    let swapped_amount_b = contract.swap(&user_b);
+    assert_eq!(swapped_amount_c, 0);
+    assert_eq!(swapped_amount_a, 9_186_324);
+    assert_eq!(swapped_amount_b, 9_999_999);
+
+    let reclaim_amount_c = contract.reclaim(&user_c);
+    assert_eq!(reclaim_amount_c, 10_000_000);
+
+    let reclaim_col_c = contract.reclaim_col(&user_c);
+    assert_eq!(reclaim_col_c, 2_000_000);
+
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+
+    token_admin_client_b.mint(&user_a, &7_892);
+    let repay_a = contract.repay(&user_a, &token_b.address, &9_194_214);
+    let repay_b = contract.repay(&user_b, &token_a.address, &9_999_999);
+
+    assert_eq!(repay_a, (9_194_214, 9_194_214));
+    assert_eq!(repay_b, (9_999_999, 9_999_999));
+
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+
+    let withdrawn_amount_a = contract.withdraw(&user_a);
+    let withdrawn_amount_b = contract.withdraw(&user_b);
+    assert_eq!(withdrawn_amount_a, 9_999_998);
+    assert_eq!(withdrawn_amount_b, 9_194_214);
+    assert_eq!(token_a.balance(&user_a), 9_999_998);
+    assert_eq!(token_b.balance(&user_b), 9_194_214);
+
+    let reclaim_amount_a = contract.reclaim(&user_a);
+    let reclaim_amount_b = contract.reclaim(&user_b);
+    assert_eq!(reclaim_amount_a, 0);
+    assert_eq!(reclaim_amount_b, 0);
+    assert_eq!(token_a.balance(&user_a), 9_999_998);
+    assert_eq!(token_b.balance(&user_b), 9_194_214);
+
+    let reclaim_col_a = contract.reclaim_col(&user_a);
+    let reclaim_col_b = contract.reclaim_col(&user_b);
+    assert_eq!(reclaim_col_a, 2_000_000);
+    assert_eq!(reclaim_col_b, 1_837_265);
+
+    assert_eq!(token_a.balance(&user_a), 11_999_998);
+    assert_eq!(token_b.balance(&user_b), 11_031_479);
+}
 
 // #[test]
 // fn test_multiple_deposits_two_accounts() {
