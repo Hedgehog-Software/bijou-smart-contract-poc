@@ -594,7 +594,7 @@ impl SwapTrait for Swap {
             None => put_deposited_token(&e, &from, &token),
         }
 
-        if !near_leg_executed && amount != 0 {
+        if !near_leg_executed && amount > 0 {
             let position_index = create_position(&e, &from, &token);
 
             token::Client::new(&e, &token).transfer(&from, &e.current_contract_address(), &amount);
