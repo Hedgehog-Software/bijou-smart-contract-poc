@@ -12,7 +12,7 @@ mod user;
 
 use core::cmp::min;
 
-use constants::{COLLATERAL_BUFFER, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
+use constants::{COLLATERAL_BUFFER, COLLATERAL_THRESHOLD, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
 use oracle::get_oracle_spot_price;
 use position::{create_position, get_used_positions_a, get_used_positions_b, set_position_valid};
 use position_data::{
@@ -80,20 +80,15 @@ fn max_time_reached(e: &Env) -> bool {
 }
 
 fn get_min_collateral(e: &Env, to: &Address, spot_rate: i128, is_deposit_token_a: bool) -> i128 {
-    let og_spot_rate = get_spot_rate(&e);
-    let forward_rate = get_forward_rate(&e);
     let swapped_amount = get_swapped_amount(&e, &to);
+    let collateral_of_swapped = (COLLATERAL_BUFFER * swapped_amount) / 100;
 
     if is_deposit_token_a {
-        let swapped_amount_as_a = convert_amount_token_b_to_a(swapped_amount, og_spot_rate);
-        let exp_return_as_b = convert_amount_token_a_to_b(swapped_amount_as_a, forward_rate);
-        let exp_col_as_b = (COLLATERAL_BUFFER * exp_return_as_b) / 100;
-        convert_amount_token_b_to_a(exp_col_as_b, spot_rate)
+        let amount = convert_amount_token_b_to_a(collateral_of_swapped, spot_rate);
+        (COLLATERAL_THRESHOLD * amount) / 100
     } else {
-        let swapped_amount_as_b = convert_amount_token_a_to_b(swapped_amount, og_spot_rate);
-        let exp_return_a = convert_amount_token_b_to_a(swapped_amount_as_b, forward_rate);
-        let exp_col_as_a = (COLLATERAL_BUFFER * exp_return_a) / 100;
-        convert_amount_token_a_to_b(exp_col_as_a, spot_rate)
+        let amount = convert_amount_token_a_to_b(collateral_of_swapped, spot_rate);
+        (COLLATERAL_THRESHOLD * amount) / 100
     }
 }
 

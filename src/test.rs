@@ -1013,7 +1013,7 @@ fn test_withdraw_liquidated() {
     contract.swap(&user_a);
     contract.swap(&user_b);
     SwapTest::add_time(&e, TIME_TO_MATURE);
-    oracle_client.set_spot_rate(&90_000_000_000_000);
+    oracle_client.set_spot_rate(&85_000_000_000_000);
     contract.liquidate(&user_a, &token_admin);
     SwapTest::add_time(&e, TIME_TO_REPAY);
     contract.withdraw(&user_a);
@@ -1403,8 +1403,8 @@ fn test_liquidated_reclaim_col() {
     assert_eq!(reward_amount, 2);
     oracle_client.set_spot_rate(&50_000_000_000_000);
     let reclaimed_collateral = contract.reclaim_col(&user_a);
-    assert_eq!(reclaimed_collateral, 160);
-    assert_eq!(token_a.balance(&user_a), 860);
+    assert_eq!(reclaimed_collateral, 162);
+    assert_eq!(token_a.balance(&user_a), 862);
 }
 
 #[test]
@@ -2017,19 +2017,19 @@ fn test_users() {
                 UserLiqData {
                     address: user_a.clone(),
                     collateral: 20,
-                    min_collateral: 20,
+                    min_collateral: 19,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
                     collateral: 20,
-                    min_collateral: 20,
+                    min_collateral: 19,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
                     collateral: 20,
-                    min_collateral: 20,
+                    min_collateral: 19,
                     is_liquidated: false
                 }
             ]
@@ -2044,13 +2044,13 @@ fn test_users() {
                 UserLiqData {
                     address: user_b.clone(),
                     collateral: 40,
-                    min_collateral: 40,
+                    min_collateral: 38,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
                     collateral: 40,
-                    min_collateral: 20,
+                    min_collateral: 19,
                     is_liquidated: false
                 }
             ]
@@ -2067,19 +2067,19 @@ fn test_users() {
                 UserLiqData {
                     address: user_a.clone(),
                     collateral: 20,
-                    min_collateral: 22,
+                    min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
                     collateral: 20,
-                    min_collateral: 22,
+                    min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
                     collateral: 20,
-                    min_collateral: 22,
+                    min_collateral: 20,
                     is_liquidated: false
                 }
             ]
@@ -2094,13 +2094,13 @@ fn test_users() {
                 UserLiqData {
                     address: user_b.clone(),
                     collateral: 40,
-                    min_collateral: 36,
+                    min_collateral: 34,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
                     collateral: 40,
-                    min_collateral: 18,
+                    min_collateral: 17,
                     is_liquidated: false
                 }
             ]
@@ -2117,19 +2117,19 @@ fn test_users() {
                 UserLiqData {
                     address: user_a.clone(),
                     collateral: 20,
-                    min_collateral: 10,
+                    min_collateral: 9,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
                     collateral: 20,
-                    min_collateral: 10,
+                    min_collateral: 9,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
                     collateral: 20,
-                    min_collateral: 10,
+                    min_collateral: 9,
                     is_liquidated: false
                 }
             ]
@@ -2144,13 +2144,13 @@ fn test_users() {
                 UserLiqData {
                     address: user_b.clone(),
                     collateral: 40,
-                    min_collateral: 80,
+                    min_collateral: 76,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
                     collateral: 40,
-                    min_collateral: 40,
+                    min_collateral: 38,
                     is_liquidated: false
                 }
             ]
@@ -2441,7 +2441,7 @@ fn test_e2e_multiple_deposits_one_unused_position() {
     assert_eq!(reclaim_amount_a, 10_000_000);
 
     let reclaim_col_a = contract.reclaim_col(&user_a);
-    assert_eq!(reclaim_col_a, 1_998_284);    
+    assert_eq!(reclaim_col_a, 2_100_001);
 
     SwapTest::add_time(&e, TIME_TO_MATURE);
 
@@ -2466,7 +2466,7 @@ fn test_e2e_multiple_deposits_one_unused_position() {
 
     let reclaim_col_a = contract.reclaim_col(&user_a);
     let reclaim_col_b = contract.reclaim_col(&user_b);
-    assert_eq!(reclaim_col_a, 2_001_716);
+    assert_eq!(reclaim_col_a, 1_899_999);
     assert_eq!(reclaim_col_b, 1_837_265);
 }
 
