@@ -406,7 +406,7 @@ pub trait SwapTrait {
     //
     // # Returns
     //
-    // Tuple: (withdrawn amount of token A, withdrawn amount of token B) or Error.
+    // Tuple: (amount of token A withdrawn, amount of token B withdrawn) or Error.
     fn withdraw(e: Env, from: Address) -> Result<(i128, i128), Error>;
 
     // Transfers the initial deposit surplus.
@@ -428,7 +428,7 @@ pub trait SwapTrait {
     //
     // # Returns
     //
-    // Reclaimed amount or Error if user was liquidated or contract is open.
+    // Reclaimed collateral amount or Error if user was liquidated or contract is open.
     fn reclaim_col(e: Env, from: Address) -> Result<i128, Error>;
 
     // Returns a user's balance.
@@ -472,7 +472,7 @@ pub trait SwapTrait {
     //
     // # Returns
     //
-    // None.
+    // None or Error.
     fn set_spot(e: Env, from: Address, rate: i128) -> Result<(), Error>;
 
     // Returns the current stage.
@@ -495,6 +495,15 @@ pub trait SwapTrait {
     //
     // Tuple containing arrays of User Data: (Users for Token A, Users for Token B).
     fn users(e: Env) -> (Vec<UserLiqData>, Vec<UserLiqData>);
+
+    // Transfer amount of token from contract to address
+    fn transfer_admin(
+        e: Env,
+        from: Address,
+        to: Address,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), Error>;
 }
 
 #[contract]
@@ -697,11 +706,11 @@ impl SwapTrait for Swap {
         }
 
         let used_deposited_amount = get_used_deposited_amount(&e, &from);
+        let token_a_address = get_token_a_address(&e);
         let min_col =
             if used_deposited_amount != 0 && (is_liquidated(&e, &from) || !max_time_reached(&e)) {
                 let spot_rate = get_oracle_spot_price(&e).price;
                 let deposited_token = get_deposited_token(&e, &from).unwrap();
-                let token_a_address = get_token_a_address(&e);
                 get_min_collateral(&e, &from, spot_rate, token_a_address == deposited_token)
             } else {
                 0
@@ -716,7 +725,7 @@ impl SwapTrait for Swap {
         }
 
         if let Some(token) = get_deposited_token(&e, &from) {
-            if token == get_token_a_address(&e) {
+            if token == token_a_address {
                 transfer_a(&e, &from, withdraw_amount);
                 put_withdrawn_collateral(&e, &from, withdraw_amount);
                 add_token_withdrawn_collateral(&e, &token, withdraw_amount);
@@ -937,5 +946,27 @@ impl SwapTrait for Swap {
             get_users_liq_data(&e, deposits_a, true),
             get_users_liq_data(&e, deposits_b, false),
         )
+    }
+
+    fn transfer_admin(
+        e: Env,
+        from: Address,
+        to: Address,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        from.require_auth();
+
+        if !is_authorized(&e, &from) {
+            return Err(Error::Unauthorized);
+        }
+
+        if token == get_token_a_address(&e) {
+            Ok(transfer_a(&e, &to, amount))
+        } else if token == get_token_b_address(&e) {
+            Ok(transfer_b(&e, &to, amount))
+        } else {
+            Err(Error::InvalidToken)
+        }
     }
 }
