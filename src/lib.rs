@@ -81,7 +81,7 @@ fn max_time_reached(e: &Env) -> bool {
 
 fn get_min_collateral(e: &Env, to: &Address, spot_rate: i128, is_deposit_token_a: bool) -> i128 {
     let swapped_amount = get_swapped_amount(&e, &to);
-    let collateral_of_swapped = (COLLATERAL_BUFFER * swapped_amount) / 100;
+    let collateral_of_swapped = calculate_percentage(swapped_amount, COLLATERAL_BUFFER);
 
     if is_deposit_token_a {
         let amount = convert_amount_token_b_to_a(collateral_of_swapped, spot_rate);
@@ -566,7 +566,7 @@ impl SwapTrait for Swap {
 
         let near_leg_executed = has_near_leg_executed(&e);
         let position_data = get_position_data(&e, &token);
-        let min_collateral = amount * COLLATERAL_BUFFER / 100;
+        let min_collateral = calculate_percentage(amount, COLLATERAL_BUFFER);
 
         if collateral < min_collateral {
             return Err(Error::InsufficientCollateral);
