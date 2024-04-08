@@ -2679,6 +2679,60 @@ fn test_e2e_multiple_deposits_one_unused_position() {
     assert_eq!(reclaim_col_b, 1_837_265);
 }
 
+#[test]
+#[should_panic]
+fn test_transfer_admin_error() {
+    let SwapTest {
+        token_admin,
+        user_a,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USD"),
+        &symbol_short!("GBP"),
+        &SCALE,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &2, &2, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.transfer_admin(&user_a, &user_a, &token_a.address, &100);
+}
+
+#[test]
+fn test_transfer_admin() {
+    let SwapTest {
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        ..
+    } = SwapTest::setup();
+
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USD"),
+        &symbol_short!("GBP"),
+        &SCALE,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &2, &2, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    assert_eq!(token_a.balance(&user_b), 0);
+    contract.transfer_admin(&token_admin, &user_b, &token_a.address, &100);
+    assert_eq!(token_a.balance(&user_b), 100);
+}
+
 // #[test]
 // fn test_multiple_deposits_two_accounts() {
 //     let SwapTest {
