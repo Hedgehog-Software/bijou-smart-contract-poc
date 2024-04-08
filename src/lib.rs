@@ -81,14 +81,14 @@ fn max_time_reached(e: &Env) -> bool {
 
 fn get_min_collateral(e: &Env, to: &Address, spot_rate: i128, is_deposit_token_a: bool) -> i128 {
     let swapped_amount = get_swapped_amount(&e, &to);
-    let collateral_of_swapped = (COLLATERAL_BUFFER * swapped_amount) / 100;
+    let collateral_of_swapped = calculate_percentage(swapped_amount, COLLATERAL_BUFFER);
 
     if is_deposit_token_a {
         let amount = convert_amount_token_b_to_a(collateral_of_swapped, spot_rate);
-        (COLLATERAL_THRESHOLD * amount) / 100
+        calculate_percentage(amount, COLLATERAL_THRESHOLD)
     } else {
         let amount = convert_amount_token_a_to_b(collateral_of_swapped, spot_rate);
-        (COLLATERAL_THRESHOLD * amount) / 100
+        calculate_percentage(amount, COLLATERAL_THRESHOLD)
     }
 }
 
@@ -110,7 +110,7 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
             let min_collateral = get_min_collateral(&e, &to, spot_price, true);
 
             if (min_collateral > collateral) || expired_and_not_repaid {
-                reward_amount = collateral / 100;
+                reward_amount = calculate_percentage(collateral, 1);
                 put_is_liquidated(&e, &to, true);
                 transfer_a(&e, &from, reward_amount);
             }
@@ -118,7 +118,7 @@ fn liquidate_user(e: &Env, to: &Address, from: &Address, spot_price: i128) -> i1
             let min_collateral = get_min_collateral(&e, &to, spot_price, false);
 
             if (min_collateral > collateral) || expired_and_not_repaid {
-                reward_amount = collateral / 100;
+                reward_amount = calculate_percentage(collateral, 1);
                 put_is_liquidated(&e, &to, true);
                 transfer_b(&e, &from, reward_amount);
             }
@@ -172,6 +172,10 @@ fn convert_amount_token_a_to_b(amount: i128, rate: i128) -> i128 {
 
 fn convert_amount_token_b_to_a(amount: i128, rate: i128) -> i128 {
     (amount * SCALE) / rate
+}
+
+fn calculate_percentage(amount: i128, rate: i128) -> i128 {
+    (amount * rate) / 100
 }
 
 fn is_valid_token(e: &Env, token: Address) -> bool {
@@ -402,8 +406,8 @@ pub trait SwapTrait {
     //
     // # Returns
     //
-    // Withdrawn amount or Error.
-    fn withdraw(e: Env, from: Address) -> Result<i128, Error>;
+    // Tuple: (withdrawn amount of token A, withdrawn amount of token B) or Error.
+    fn withdraw(e: Env, from: Address) -> Result<(i128, i128), Error>;
 
     // Transfers the initial deposit surplus.
     //
@@ -562,7 +566,7 @@ impl SwapTrait for Swap {
 
         let near_leg_executed = has_near_leg_executed(&e);
         let position_data = get_position_data(&e, &token);
-        let min_collateral = amount * COLLATERAL_BUFFER / 100;
+        let min_collateral = calculate_percentage(amount, COLLATERAL_BUFFER);
 
         if collateral < min_collateral {
             return Err(Error::InsufficientCollateral);
@@ -786,7 +790,7 @@ impl SwapTrait for Swap {
         Ok((total_returned_amount, total_amount_to_repay))
     }
 
-    fn withdraw(e: Env, from: Address) -> Result<i128, Error> {
+    fn withdraw(e: Env, from: Address) -> Result<(i128, i128), Error> {
         from.require_auth();
 
         let forward_rate = get_forward_rate(&e);
@@ -794,7 +798,9 @@ impl SwapTrait for Swap {
         let withdrawn_amount = get_withdrawn_amount(&e, &from);
         let deposited_token = get_deposited_token(&e, &from).unwrap();
         let token_a_data = get_token_a(&e);
-        let withdraw_amount: i128;
+        let token_b_data = get_token_b(&e);
+        let mut withdraw_amount_a: i128 = 0;
+        let mut withdraw_amount_b: i128 = 0;
 
         if !max_time_reached(&e) {
             return Err(Error::TimeNotReached);
@@ -807,37 +813,77 @@ impl SwapTrait for Swap {
         if deposited_token == token_a_data.address {
             let token_a_available_amount =
                 token_a_data.returned_amount - token_a_data.withdrawn_amount;
-
             let converted_returned_amount =
                 convert_amount_token_b_to_a(returned_amount, forward_rate);
+            let exp_withdraw = converted_returned_amount - withdrawn_amount;
+            withdraw_amount_a = min(exp_withdraw, token_a_available_amount);
 
-            withdraw_amount = min(
-                converted_returned_amount - withdrawn_amount,
-                token_a_available_amount,
-            );
+            if withdraw_amount_a > 0 {
+                transfer_a(&e, &from, withdraw_amount_a);
+                add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount_a);
+                put_withdrawn_amount(&e, &from, withdraw_amount_a);
+            }
 
-            transfer_a(&e, &from, withdraw_amount);
-            add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
-            put_withdrawn_amount(&e, &from, withdraw_amount);
+            if exp_withdraw > withdraw_amount_a {
+                //    return token b to compensate
+                let token_b_address = token_b_data.address;
+                let rem_withdraw = exp_withdraw - withdraw_amount_a;
+                let exp_withdraw_amount_b = convert_amount_token_a_to_b(rem_withdraw, forward_rate);
+                let used_returned = convert_amount_token_a_to_b(withdraw_amount_a, forward_rate);
+                let use_from_returned = min(returned_amount - used_returned, exp_withdraw_amount_b);
+                let max_collateral_available =
+                    calculate_percentage(use_from_returned, COLLATERAL_BUFFER);
+                let use_from_col = min(
+                    exp_withdraw_amount_b - use_from_returned,
+                    max_collateral_available,
+                );
+                withdraw_amount_b = use_from_returned + use_from_col;
+                let converted_withdraw_amount_b =
+                    convert_amount_token_b_to_a(withdraw_amount_b, forward_rate);
+
+                transfer_b(&e, &from, withdraw_amount_b);
+                put_withdrawn_amount(&e, &from, converted_withdraw_amount_b);
+                add_token_withdrawn_amount(&e, &token_b_address, use_from_returned);
+                add_token_withdrawn_collateral(&e, &token_b_address, use_from_col);
+            }
         } else {
             // User returned token_a
-            let token_b_data = get_token_b(&e);
             let token_b_available_amount =
                 token_b_data.returned_amount - token_b_data.withdrawn_amount;
-
             let converted_returned_amount =
                 convert_amount_token_a_to_b(returned_amount, forward_rate);
-            withdraw_amount = min(
-                converted_returned_amount - withdrawn_amount,
-                token_b_available_amount,
-            );
+            let exp_withdraw = converted_returned_amount - withdrawn_amount;
+            withdraw_amount_b = min(exp_withdraw, token_b_available_amount);
 
-            transfer_b(&e, &from, withdraw_amount);
-            add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount);
-            put_withdrawn_amount(&e, &from, withdraw_amount);
+            if withdraw_amount_b > 0 {
+                transfer_b(&e, &from, withdraw_amount_b);
+                add_token_withdrawn_amount(&e, &deposited_token, withdraw_amount_b);
+                put_withdrawn_amount(&e, &from, withdraw_amount_b);
+            }
+
+            if exp_withdraw > withdraw_amount_b {
+                let rem_withdraw = exp_withdraw - withdraw_amount_b;
+                let exp_withdraw_amount_a = convert_amount_token_b_to_a(rem_withdraw, forward_rate);
+                let used_returned = convert_amount_token_b_to_a(withdraw_amount_b, forward_rate);
+                let use_from_returned = min(returned_amount - used_returned, exp_withdraw_amount_a);
+                let max_collateral_available =
+                    calculate_percentage(use_from_returned, COLLATERAL_BUFFER);
+                let use_from_col = min(
+                    exp_withdraw_amount_a - use_from_returned,
+                    max_collateral_available,
+                );
+                withdraw_amount_a = use_from_returned + use_from_col;
+                let converted_withdraw_amount_a =
+                    convert_amount_token_a_to_b(withdraw_amount_a, forward_rate);
+
+                transfer_a(&e, &from, withdraw_amount_a);
+                put_withdrawn_amount(&e, &from, converted_withdraw_amount_a);
+                add_token_withdrawn_amount(&e, &token_a_data.address, use_from_returned);
+                add_token_withdrawn_collateral(&e, &token_a_data.address, use_from_col);
+            }
         }
 
-        Ok(withdraw_amount)
+        Ok((withdraw_amount_a, withdraw_amount_b))
     }
 
     fn spot_rate(e: Env) -> i128 {
