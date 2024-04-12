@@ -1257,7 +1257,7 @@ fn test_reclaim_at_deposit() {
 }
 
 #[test]
-fn test_reclaim_at_swap() {
+fn test_reclaim_a_at_swap() {
     let forward_rate: i128 = SCALE;
     let SwapTest {
         e,
@@ -1267,8 +1267,10 @@ fn test_reclaim_at_swap() {
         token_a,
         token_b,
         contract,
+        oracle_client,
         ..
     } = SwapTest::setup();
+    oracle_client.set_spot_rate(&93_105_303_347_992);
     contract.initialize(
         &token_admin,
         &token_a.address,
@@ -1280,17 +1282,143 @@ fn test_reclaim_at_swap() {
     );
     contract.init_pos(&token_admin, &100, &50, &100);
     contract.deposit(&user_a, &token_a.address, &100, &20);
-    contract.deposit(&user_b, &token_b.address, &200, &40);
+    contract.deposit(&user_b, &token_b.address, &186, &40);
 
     SwapTest::add_time(&e, TIME_TO_EXEC);
-    contract.swap(&user_b);
     contract.swap(&user_a);
-
-    let reclaimed_deposit = contract.reclaim(&user_b);
-    assert_eq!(reclaimed_deposit, 100);
-    assert_eq!(token_b.balance(&user_b), 860);
+    contract.swap(&user_b);
 
     let reclaimed_deposit = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_deposit, 0);
+    assert_eq!(token_a.balance(&user_a), 880);
+
+    let reclaimed_deposit = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_deposit, 0);
+}
+
+#[test]
+fn test_reclaim_b_at_swap() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    oracle_client.set_spot_rate(&93_105_303_347_992);
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &10, &5, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+    contract.deposit(&user_b, &token_b.address, &186, &40);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+
+    let reclaimed_deposit = contract.reclaim(&user_b);
+    assert_eq!(reclaimed_deposit, 92);
+    assert_eq!(token_b.balance(&user_b), 866);
+
+    let reclaimed_deposit = contract.reclaim(&user_b);
+    assert_eq!(reclaimed_deposit, 0);
+    assert_eq!(token_b.balance(&user_b), 866);
+
+    let reclaimed_deposit = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_deposit, 0);
+}
+
+#[test]
+fn test_reclaim_a_at_swap_one_deposit() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    oracle_client.set_spot_rate(&93_105_303_347_992);
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &10, &10, &100);
+    contract.deposit(&user_a, &token_a.address, &100, &20);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    let swapped_a = contract.swap(&user_a);
+    let swapped_b = contract.swap(&user_b);
+    assert_eq!(swapped_a, 0);
+    assert_eq!(swapped_b, 0);
+
+    let reclaimed_deposit = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_deposit, 99);
+    assert_eq!(token_a.balance(&user_a), 979);
+
+    let reclaimed_deposit = contract.reclaim(&user_a);
+    assert_eq!(reclaimed_deposit, 0);
+}
+
+#[test]
+fn test_reclaim_b_at_swap_one_deposit() {
+    let forward_rate: i128 = SCALE;
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    oracle_client.set_spot_rate(&93_105_303_347_992);
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USDC"),
+        &symbol_short!("EURC"),
+        &forward_rate,
+        &TIME_TO_MATURE,
+    );
+    contract.init_pos(&token_admin, &10, &10, &100);
+    contract.deposit(&user_b, &token_b.address, &93, &20);
+
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    let swapped_b = contract.swap(&user_a);
+    let swapped_a = contract.swap(&user_b);
+    assert_eq!(swapped_a, 0);
+    assert_eq!(swapped_b, 0);
+
+    let reclaimed_deposit = contract.reclaim(&user_b);
+    assert_eq!(reclaimed_deposit, 92);
+    assert_eq!(token_b.balance(&user_b), 979);
+
+    let reclaimed_deposit = contract.reclaim(&user_b);
     assert_eq!(reclaimed_deposit, 0);
 }
 
