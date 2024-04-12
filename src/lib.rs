@@ -10,7 +10,7 @@ mod token_data;
 mod types;
 mod user;
 
-use core::cmp::min;
+use core::cmp::{max, min};
 
 use constants::{COLLATERAL_BUFFER, COLLATERAL_THRESHOLD, SCALE, TIME_TO_EXEC, TIME_TO_REPAY};
 use oracle::get_oracle_spot_price;
@@ -190,8 +190,10 @@ fn calculate_used_deposited_amount(
     total_other_deposited_amount: i128,
     base_deposit_amount: i128,
     base_converted_amount: i128,
+    convert_currency: fn(i128, i128) -> i128,
+    spot_rate: i128,
 ) -> i128 {
-    let mut used_amount: i128 = 0;
+    let mut used_amount = 0;
     let mut acum = 0;
 
     for position in used_positions.iter() {
@@ -200,7 +202,8 @@ fn calculate_used_deposited_amount(
             if position.address == user.clone() {
                 used_amount += base_deposit_amount;
                 if acum >= total_other_deposited_amount {
-                    return used_amount - (acum - total_other_deposited_amount);
+                    let surplus = convert_currency(acum - total_other_deposited_amount, spot_rate);
+                    return max(used_amount - surplus, 0);
                 }
             }
             if acum >= total_other_deposited_amount {
@@ -219,7 +222,7 @@ fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
     let position_b = get_position_b(&e);
     let spot_rate = get_spot_rate(&e);
 
-    match token_a_data.address == get_deposited_token(&e, &user).unwrap() {
+    let amount = match token_a_data.address == get_deposited_token(&e, &user).unwrap() {
         true => {
             let used_positions_a = get_used_positions_a(&e);
             let total_other_deposited_amount = token_b_data.deposited_amount;
@@ -231,6 +234,8 @@ fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
                 total_other_deposited_amount,
                 position_a.deposit_amount,
                 base_converted_amount,
+                convert_amount_token_b_to_a,
+                spot_rate,
             )
         }
         false => {
@@ -244,9 +249,12 @@ fn get_used_deposited_amount(e: &Env, user: &Address) -> i128 {
                 total_other_deposited_amount,
                 position_b.deposit_amount,
                 base_converted_amount,
+                convert_amount_token_a_to_b,
+                spot_rate,
             )
         }
-    }
+    };
+    max(amount, 0)
 }
 
 fn calculate_amount_deposit_token_b(
