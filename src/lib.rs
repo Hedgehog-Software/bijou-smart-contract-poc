@@ -81,14 +81,33 @@ fn max_time_reached(e: &Env) -> bool {
 
 fn get_min_collateral(e: &Env, to: &Address, spot_rate: i128, is_deposit_token_a: bool) -> i128 {
     let swapped_amount = get_swapped_amount(&e, &to);
-    let collateral_of_swapped = calculate_percentage(swapped_amount, COLLATERAL_BUFFER);
+    let og_spot_rate = get_spot_rate(&e);
+    let forward_rate = get_forward_rate(&e);
 
     if is_deposit_token_a {
-        let amount = convert_amount_token_b_to_a(collateral_of_swapped, spot_rate);
-        calculate_percentage(amount, COLLATERAL_THRESHOLD)
+        let used_deposited_amount = convert_amount_token_b_to_a(swapped_amount, og_spot_rate);
+        let to_return_amount = convert_amount_token_a_to_b(used_deposited_amount, forward_rate);
+        let current_price = convert_amount_token_a_to_b(used_deposited_amount, spot_rate);
+        let min_col = calculate_percentage(used_deposited_amount, COLLATERAL_BUFFER);
+        if to_return_amount > current_price {
+            let mtm = to_return_amount - current_price;
+            let amount = convert_amount_token_b_to_a(mtm, spot_rate);
+            max(calculate_percentage(amount, COLLATERAL_THRESHOLD), min_col)
+        } else {
+            min_col
+        }
     } else {
-        let amount = convert_amount_token_a_to_b(collateral_of_swapped, spot_rate);
-        calculate_percentage(amount, COLLATERAL_THRESHOLD)
+        let used_deposited_amount = convert_amount_token_a_to_b(swapped_amount, og_spot_rate);
+        let to_return_amount = convert_amount_token_b_to_a(used_deposited_amount, forward_rate);
+        let current_price = convert_amount_token_b_to_a(used_deposited_amount, spot_rate);
+        let min_col = calculate_percentage(used_deposited_amount, COLLATERAL_BUFFER);
+        if to_return_amount > current_price {
+            let mtm = to_return_amount - current_price;
+            let amount = convert_amount_token_a_to_b(mtm, spot_rate);
+            max(calculate_percentage(amount, COLLATERAL_THRESHOLD), min_col)
+        } else {
+            min_col
+        }
     }
 }
 
@@ -726,7 +745,7 @@ impl SwapTrait for Swap {
 
         let collateral_amount = get_collateral(&e, &from);
         let withdrawn_collateral_amount = get_withdrawn_collateral(&e, &from);
-        let withdraw_amount = collateral_amount - withdrawn_collateral_amount - min_col;
+        let withdraw_amount = collateral_amount - min_col - withdrawn_collateral_amount;
 
         if withdraw_amount <= 0 {
             return Ok(0);
