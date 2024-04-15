@@ -1114,9 +1114,13 @@ fn test_withdraw_b_insuficient_balance() {
     assert_eq!(withdrawn_amount, (1000, 0));
     assert_eq!(token_a.balance(&user_b), 1000);
     assert_eq!(token_b.balance(&user_b), 0);
+
     let withdrawn_amount = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount, (0, 0));
     assert_eq!(token_a.balance(&user_b), 1000);
+
+    let withdrawn_amount = contract.withdraw(&user_a);
+    assert_eq!(withdrawn_amount, (0, 0));
 }
 
 #[test]
@@ -1162,14 +1166,18 @@ fn test_withdraw_b_multiple_a_insuficient_balance() {
     contract.repay(&user_a, &token_b.address, &375);
     contract.repay(&user_b, &token_a.address, &1000);
     SwapTest::add_time(&e, TIME_TO_REPAY);
+    contract.liquidate(&user_c, &user_a);
     let withdrawn_amount = contract.withdraw(&user_a);
     assert_eq!(withdrawn_amount, (500, 0));
 
     let withdrawn_amount = contract.withdraw(&user_b);
-    assert_eq!(withdrawn_amount, (500, 375));
-    assert_eq!(token_a.balance(&user_b), 500);
+    assert_eq!(withdrawn_amount, (468, 375));
+    assert_eq!(token_a.balance(&user_b), 468);
     assert_eq!(token_b.balance(&user_b), 615);
+
     let withdrawn_amount = contract.withdraw(&user_b);
+    assert_eq!(withdrawn_amount, (0, 0));
+    let withdrawn_amount = contract.withdraw(&user_a);
     assert_eq!(withdrawn_amount, (0, 0));
 }
 
@@ -1216,16 +1224,66 @@ fn test_withdraw_a_multiples_b_insuficient_balance() {
     contract.repay(&user_a, &token_b.address, &750);
     contract.repay(&user_b, &token_a.address, &500);
     SwapTest::add_time(&e, TIME_TO_REPAY);
+    contract.liquidate(&user_c, &user_b);
     let withdrawn_amount = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount, (0, 375));
 
     let withdrawn_amount = contract.withdraw(&user_a);
-    assert_eq!(withdrawn_amount, (500, 375));
+    assert_eq!(withdrawn_amount, (500, 400));
     assert_eq!(token_a.balance(&user_a), 500);
-    assert_eq!(token_b.balance(&user_a), 425);
+    assert_eq!(token_b.balance(&user_a), 450);
     let withdrawn_amount = contract.withdraw(&user_b);
     assert_eq!(withdrawn_amount, (0, 0));
     assert_eq!(token_a.balance(&user_a), 500);
+}
+
+#[test]
+fn test_withdraw_liquidated_devaluation() {
+    let SwapTest {
+        e,
+        token_admin,
+        user_a,
+        user_b,
+        token_a,
+        token_b,
+        contract,
+        token_admin_client_a,
+        token_admin_client_b,
+        oracle_client,
+        ..
+    } = SwapTest::setup();
+    let spot_rate: i128 = 52_631_578_947_000;
+    let forward_rate: i128 = 52_356_020_942_000;
+
+    token_admin_client_a.mint(&user_a, &12_000_000);
+    token_admin_client_b.mint(&user_b, &6_315_789);
+
+    oracle_client.set_spot_rate(&spot_rate);
+    contract.initialize(
+        &token_admin,
+        &token_a.address,
+        &token_b.address,
+        &symbol_short!("USD"),
+        &symbol_short!("GBP"),
+        &forward_rate,
+        &TIME_TO_REPAY,
+    );
+    let deposit_amount_b = contract.init_pos(&token_admin, &10, &10, &10_000_000);
+    assert_eq!(deposit_amount_b, 5_263_157);
+    contract.deposit(&user_a, &token_a.address, &10_000_000, &2_000_000);
+    contract.deposit(&user_b, &token_b.address, &5_263_157, &1_052_632);
+    SwapTest::add_time(&e, TIME_TO_EXEC);
+    contract.swap(&user_a);
+    contract.swap(&user_b);
+    oracle_client.set_spot_rate(&43_668_122_270_000);
+    let reward_amount_a = contract.liquidate(&user_a, &token_admin);
+    assert_eq!(reward_amount_a, 20_000);
+    SwapTest::add_time(&e, TIME_TO_MATURE);
+    contract.repay(&user_b, &token_a.address, &10_000_000);
+    SwapTest::add_time(&e, TIME_TO_REPAY);
+
+    let withdrawn_b = contract.withdraw(&user_b);
+    assert_eq!(withdrawn_b, (11_979_998, 0));
 }
 
 #[test]
