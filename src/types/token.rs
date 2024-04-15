@@ -12,4 +12,6 @@ pub struct Token {
     pub reclaimed_amount: i128,
     pub collateral_amount: i128,
     pub withdrawn_collateral: i128,
+    pub liquidated_collateral: i128,
+    pub used_liq_collateral: i128,
 }

@@ -16,6 +16,8 @@ pub(crate) fn init_token_a(e: &Env, token: &Address, name: Symbol) {
             reclaimed_amount: 0,
             collateral_amount: 0,
             withdrawn_collateral: 0,
+            liquidated_collateral: 0,
+            used_liq_collateral: 0,
         },
     );
 }
@@ -33,6 +35,8 @@ pub(crate) fn init_token_b(e: &Env, token: &Address, name: Symbol) {
             reclaimed_amount: 0,
             collateral_amount: 0,
             withdrawn_collateral: 0,
+            liquidated_collateral: 0,
+            used_liq_collateral: 0,
         },
     );
 }
@@ -112,5 +116,17 @@ pub(crate) fn add_token_collateral_amount(e: &Env, token: &Address, amount: i128
 pub(crate) fn add_token_withdrawn_collateral(e: &Env, token: &Address, amount: i128) {
     let mut token_data = get_token(&e, &token);
     token_data.withdrawn_collateral += amount;
+    edit_token(e, &token, token_data);
+}
+
+pub(crate) fn add_token_liquidated_collateral(e: &Env, token: &Address, amount: i128) {
+    let mut token_data = get_token(&e, &token);
+    token_data.liquidated_collateral += amount;
+    edit_token(e, &token, token_data);
+}
+
+pub(crate) fn add_token_used_liq_collateral(e: &Env, token: &Address, amount: i128) {
+    let mut token_data = get_token(&e, &token);
+    token_data.used_liq_collateral += amount;
     edit_token(e, &token, token_data);
 }
