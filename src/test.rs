@@ -1740,8 +1740,8 @@ fn test_liquidated_reclaim_col() {
     assert_eq!(reward_amount, 2);
     oracle_client.set_spot_rate(&50_000_000_000_000);
     let reclaimed_collateral = contract.reclaim_col(&user_a);
-    assert_eq!(reclaimed_collateral, 162);
-    assert_eq!(token_a.balance(&user_a), 862);
+    assert_eq!(reclaimed_collateral, 75);
+    assert_eq!(token_a.balance(&user_a), 775);
 }
 
 #[test]
@@ -2112,12 +2112,11 @@ fn test_liquidate_devaluation() {
         oracle_client,
         ..
     } = SwapTest::setup();
-    let spot_rate: i128 = 190_000_000_000_000;
-    let forward_rate: i128 = 191_000_000_000_000;
-    let decimals = 100_000_000;
+    let spot_rate: i128 = 52_631_578_947_000;
+    let forward_rate: i128 = 52_356_020_942_000;
 
-    token_admin_client_a.mint(&user_a, &(20_000 * decimals));
-    token_admin_client_b.mint(&user_b, &(26_000 * decimals));
+    token_admin_client_a.mint(&user_a, &12_000_000);
+    token_admin_client_b.mint(&user_b, &6_315_789);
 
     oracle_client.set_spot_rate(&spot_rate);
     contract.initialize(
@@ -2129,38 +2128,30 @@ fn test_liquidate_devaluation() {
         &forward_rate,
         &TIME_TO_REPAY,
     );
-    let deposit_amount_b = contract.init_pos(&token_admin, &100, &100, &(10_000 * decimals));
-    assert_eq!(deposit_amount_b, 1_900_000_000_000);
-    contract.deposit(
-        &user_a,
-        &token_a.address,
-        &(10_000 * decimals),
-        &(2_200 * decimals),
-    );
-    contract.deposit(
-        &user_b,
-        &token_b.address,
-        &(19_000 * decimals),
-        &(4_000 * decimals),
-    );
+    let deposit_amount_b = contract.init_pos(&token_admin, &10, &10, &10_000_000);
+    assert_eq!(deposit_amount_b, 5_263_157);
+    contract.deposit(&user_a, &token_a.address, &10_000_000, &2_000_000);
+    contract.deposit(&user_b, &token_b.address, &5_263_157, &1_052_632);
     SwapTest::add_time(&e, TIME_TO_EXEC);
 
     let swapped_amount_a = contract.swap(&user_a);
     let swapped_amount_b = contract.swap(&user_b);
-    assert_eq!(swapped_amount_a, 1_900_000_000_000);
-    assert_eq!(swapped_amount_b, 1_000_000_000_000);
+    assert_eq!(swapped_amount_a, 5_263_157);
+    assert_eq!(swapped_amount_b, 9_999_998);
+
+    oracle_client.set_spot_rate(&45_668_122_270_000);
 
     let reward_amount_a = contract.liquidate(&user_a, &token_admin);
     assert_eq!(reward_amount_a, 0);
     let reward_amount_b = contract.liquidate(&user_b, &token_admin);
     assert_eq!(reward_amount_b, 0);
 
-    oracle_client.set_spot_rate(&380_000_000_000_000);
+    oracle_client.set_spot_rate(&43_668_122_270_000);
 
     let reward_amount_a = contract.liquidate(&user_a, &token_admin);
-    assert_eq!(reward_amount_a, 0);
+    assert_eq!(reward_amount_a, 20_000);
     let reward_amount_b = contract.liquidate(&user_b, &token_admin);
-    assert_eq!(reward_amount_b, 4_000_000_000);
+    assert_eq!(reward_amount_b, 0);
 }
 
 #[test]
@@ -2354,19 +2345,19 @@ fn test_users() {
                 UserLiqData {
                     address: user_a.clone(),
                     collateral: 20,
-                    min_collateral: 19,
+                    min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
                     collateral: 20,
-                    min_collateral: 19,
+                    min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
                     collateral: 20,
-                    min_collateral: 19,
+                    min_collateral: 20,
                     is_liquidated: false
                 }
             ]
@@ -2381,13 +2372,13 @@ fn test_users() {
                 UserLiqData {
                     address: user_b.clone(),
                     collateral: 40,
-                    min_collateral: 38,
+                    min_collateral: 40,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
                     collateral: 40,
-                    min_collateral: 19,
+                    min_collateral: 20,
                     is_liquidated: false
                 }
             ]
@@ -2431,13 +2422,13 @@ fn test_users() {
                 UserLiqData {
                     address: user_b.clone(),
                     collateral: 40,
-                    min_collateral: 34,
+                    min_collateral: 40,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
                     collateral: 40,
-                    min_collateral: 17,
+                    min_collateral: 20,
                     is_liquidated: false
                 }
             ]
@@ -2454,19 +2445,19 @@ fn test_users() {
                 UserLiqData {
                     address: user_a.clone(),
                     collateral: 20,
-                    min_collateral: 9,
+                    min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_c.clone(),
                     collateral: 20,
-                    min_collateral: 9,
+                    min_collateral: 20,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_d.clone(),
                     collateral: 20,
-                    min_collateral: 9,
+                    min_collateral: 20,
                     is_liquidated: false
                 }
             ]
@@ -2481,13 +2472,13 @@ fn test_users() {
                 UserLiqData {
                     address: user_b.clone(),
                     collateral: 40,
-                    min_collateral: 76,
+                    min_collateral: 250,
                     is_liquidated: false
                 },
                 UserLiqData {
                     address: user_e.clone(),
                     collateral: 40,
-                    min_collateral: 38,
+                    min_collateral: 125,
                     is_liquidated: false
                 }
             ]
@@ -2778,7 +2769,7 @@ fn test_e2e_multiple_deposits_one_unused_position() {
     assert_eq!(reclaim_amount_a, 10_000_000);
 
     let reclaim_col_a = contract.reclaim_col(&user_a);
-    assert_eq!(reclaim_col_a, 2_100_001);
+    assert_eq!(reclaim_col_a, 2_000_001);
 
     SwapTest::add_time(&e, TIME_TO_MATURE);
 
@@ -2803,7 +2794,7 @@ fn test_e2e_multiple_deposits_one_unused_position() {
 
     let reclaim_col_a = contract.reclaim_col(&user_a);
     let reclaim_col_b = contract.reclaim_col(&user_b);
-    assert_eq!(reclaim_col_a, 1_899_999);
+    assert_eq!(reclaim_col_a, 1_999_999);
     assert_eq!(reclaim_col_b, 1_837_265);
 }
 
