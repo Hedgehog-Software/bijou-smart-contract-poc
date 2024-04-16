@@ -5,4 +5,6 @@ pub const COLLATERAL_BUFFER: i128 = 20;
 pub const COLLATERAL_THRESHOLD: i128 = 125;
 pub const TIME_TO_EXEC: u64 = 86400;  // 86400sg = 12 hours
 pub const TIME_TO_REPAY: u64 = 172800; // 172800sg = 48 hours
+
+#[cfg(test)]
 pub const TIME_TO_MATURE: u64 = 604800; // 604800sg = 1 week

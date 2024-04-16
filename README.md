@@ -14,6 +14,17 @@ or
 cargo build --target wasm32-unknown-unknown --release
 ```
 
+# (Optional) Optimizing Build
+Soroban cli must have the `opt` feature
+```
+cargo install --locked soroban-cli --features opt
+```
+Then build an optimized `.wasm` file
+
+```
+soroban contract optimize --wasm target/wasm32-unknown-unknown/release/swap_contract.wasm
+```
+
 # To Deploy
 
 ```
